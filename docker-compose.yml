@@ -1,0 +1,64 @@
+services:
+  rclone:
+    image: ${RCLONE_IMAGE:-rclone/rclone:1.66}
+    container_name: backupstack_rclone
+    networks: [backupnet]
+    environment:
+      RCLONE_CONFIG: /config/rclone/rclone.conf
+    volumes:
+      - ./rclone/rclone.conf:/config/rclone/rclone.conf:ro
+      - ./secrets/rclone-rest.env:/run/rest.env:ro
+    entrypoint: ["/bin/sh","-c"]
+    command:
+      - 'set -a; . /run/rest.env; set +a; exec rclone serve restic --addr 0.0.0.0:8080 --user "$$RCLONE_REST_USER" --pass "$$RCLONE_REST_PASS" ${REMOTE_NAME}:backups/${HOST_TAG}'
+    healthcheck:
+      test: ["CMD","rclone","lsd","${REMOTE_NAME}:"]
+      interval: 30s
+      timeout: 25s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  engine:
+    build: ./engine
+    image: backupstack-engine:local
+    container_name: backupstack_engine
+    init: true
+    stop_grace_period: 90s
+    depends_on:
+      rclone:
+        condition: service_healthy
+    networks: [backupnet]
+    ports: ["${WEB_PORT:-8088}:8088"]
+    environment:
+      TZ: Asia/Seoul
+      WEB_ADMIN_USER: ${WEB_ADMIN_USER:-admin}
+      REMOTE_NAME: ${REMOTE_NAME}
+      HOST_TAG: ${HOST_TAG}
+      ALLOW_REPO_INIT: ${ALLOW_REPO_INIT:-false}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home:/home:ro
+      - /var/lib/docker/volumes:/var/lib/docker/volumes:ro
+      - backupstack_staging:/home/docker/_backup_staging
+      - ./config:/config
+      - ./secrets:/secrets:ro
+      - backupstack_state:/state
+      - backupstack_logs:/var/log/backup
+      - backupstack_restoreout:/restore-out
+    healthcheck:
+      test: ["CMD","wget","-qO-","http://localhost:8088/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+networks:
+  backupnet:
+    driver: bridge
+
+volumes:
+  backupstack_staging:
+  backupstack_state:
+  backupstack_logs:
+  backupstack_restoreout:

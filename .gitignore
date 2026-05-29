@@ -1,0 +1,10 @@
+.env
+/secrets/
+/rclone/rclone.conf
+/config/config.env
+/config/excludes.txt
+/restore-out/
+engine/web/backup-engine
+*.db
+*.db-wal
+*.db-shm
