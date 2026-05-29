@@ -2,6 +2,7 @@ package main
 
 import (
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
@@ -12,6 +13,46 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 )
+
+// randPassword returns a random alphanumeric password (ambiguous chars omitted).
+func randPassword(n int) string {
+	const al = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand: " + err.Error())
+	}
+	for i := range b {
+		b[i] = al[int(b[i])%len(al)]
+	}
+	return string(b)
+}
+
+// pickAdminHash decides which bcrypt hash to use for the admin account.
+//   - secretsHash: operator-provided hash file (/secrets), highest precedence
+//   - stateHash:   previously persisted hash (/state)
+//   - envPw:       plaintext password from WEB_ADMIN_PASSWORD(_FILE)
+//
+// Returns the hash to use, a hash to persist to /state ("" = nothing), and a
+// generated plaintext to surface once ("" = none). Persisting the derived hash
+// keeps the session version (and thus existing logins) stable across restarts.
+func pickAdminHash(secretsHash, stateHash, envPw string) (use, persist, generated string, err error) {
+	if secretsHash != "" {
+		return secretsHash, "", "", nil
+	}
+	if envPw != "" {
+		if stateHash != "" && checkPassword(stateHash, envPw) {
+			return stateHash, "", "", nil // unchanged → reuse persisted hash
+		}
+		h, e := hashPassword(envPw)
+		return h, h, "", e
+	}
+	if stateHash != "" {
+		return stateHash, "", "", nil
+	}
+	gen := randPassword(16)
+	h, e := hashPassword(gen)
+	return h, h, gen, e
+}
 
 const sessionTTL = int64(12 * 3600)
 

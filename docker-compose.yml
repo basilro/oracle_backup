@@ -11,6 +11,7 @@ services:
     environment:
       TZ: Asia/Seoul
       WEB_ADMIN_USER: ${WEB_ADMIN_USER:-admin}
+      WEB_ADMIN_PASSWORD: ${WEB_ADMIN_PASSWORD:-}
       REMOTE_NAME: ${REMOTE_NAME:?set REMOTE_NAME in .env}
       HOST_TAG: ${HOST_TAG:?set HOST_TAG in .env}
       ALLOW_REPO_INIT: ${ALLOW_REPO_INIT:-false}

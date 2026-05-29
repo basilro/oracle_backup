@@ -73,6 +73,57 @@ func trimSpace(b []byte) string {
 	return string(b)
 }
 
+// resolveAdminHash determines the admin bcrypt hash from (in precedence):
+// /secrets/web-admin.hash → WEB_ADMIN_PASSWORD[_FILE] → /state/web-admin.hash →
+// a freshly generated password (printed once). Derived hashes are persisted to
+// /state so the plaintext env can be removed after first boot.
+func resolveAdminHash(adminUser string) string {
+	const stateHashPath = "/state/web-admin.hash"
+	read := func(p string) string {
+		if b, err := os.ReadFile(p); err == nil {
+			return trimSpace(b)
+		}
+		return ""
+	}
+	secretsHash := read("/secrets/web-admin.hash")
+	stateHash := read(stateHashPath)
+	envPw := os.Getenv("WEB_ADMIN_PASSWORD")
+	if pf := os.Getenv("WEB_ADMIN_PASSWORD_FILE"); pf != "" {
+		if v := read(pf); v != "" {
+			envPw = v
+		}
+	}
+	use, persist, generated, err := pickAdminHash(secretsHash, stateHash, envPw)
+	if err != nil {
+		log.Printf("admin password hashing failed: %v", err)
+		return ""
+	}
+	if persist != "" {
+		writeFile0600(stateHashPath, persist)
+	}
+	if generated != "" {
+		log.Printf("================ ADMIN PASSWORD (shown once) ================")
+		log.Printf("  user = %s", adminUser)
+		log.Printf("  password = %s", generated)
+		log.Printf("  (set WEB_ADMIN_PASSWORD in .env to choose your own)")
+		log.Printf("=============================================================")
+	} else if envPw != "" && secretsHash == "" {
+		log.Printf("admin password set from WEB_ADMIN_PASSWORD (hash persisted; plaintext env may be removed after first boot)")
+	}
+	return use
+}
+
+func writeFile0600(path, content string) {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(content+"\n"), 0600); err != nil {
+		log.Printf("warn: persist %s: %v", path, err)
+		return
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		log.Printf("warn: rename %s: %v", path, err)
+	}
+}
+
 func main() {
 	cfgPath := "/config/config.env"
 	store, err := OpenStore("/state/history.db")
@@ -88,11 +139,9 @@ func main() {
 	if adminUser == "" {
 		adminUser = "admin"
 	}
-	adminHash := ""
-	if b, err := os.ReadFile("/secrets/web-admin.hash"); err == nil {
-		adminHash = trimSpace(b)
-	} else {
-		log.Println("WARNING: /secrets/web-admin.hash missing — login disabled until provided")
+	adminHash := resolveAdminHash(adminUser)
+	if adminHash == "" {
+		log.Println("WARNING: no admin password configured — login disabled")
 	}
 
 	// appCtx is threaded into every backup/restore so an in-flight restic run
