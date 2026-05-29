@@ -1,5 +1,6 @@
 let csrf = "";
 const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const cfgFields = {
   keep_daily: "보존일수", upload_limit_kbps: "업로드 제한(KB/s)",
   backup_schedule: "백업 스케줄(cron)", check_schedule: "검증 스케줄(cron)",
@@ -31,8 +32,8 @@ async function loadStatus() {
   const r = await api("/api/status");
   if (r.status === 401) { location.reload(); return; }
   const s = await r.json();
-  $("#status").innerHTML = `<h2>상태</h2>마지막 성공: <b>${s.last_success || "-"}</b><br>다음 예정: ${s.next_run || "(스케줄러 꺼짐)"}<br>진행 중: ${s.busy ? "예" : "아니오"}` +
-    (s.last_failure ? `<br><span class="fail">마지막 실패: ${s.last_failure}</span>` : "");
+  $("#status").innerHTML = `<h2>상태</h2>마지막 성공: <b>${esc(s.last_success) || "-"}</b><br>다음 예정: ${esc(s.next_run) || "(스케줄러 꺼짐)"}<br>진행 중: ${s.busy ? "예" : "아니오"}` +
+    (s.last_failure ? `<br><span class="fail">마지막 실패: ${esc(s.last_failure)}</span>` : "");
 }
 
 async function loadConfig() {
@@ -59,7 +60,7 @@ async function saveCfg() {
 async function loadSnaps() {
   const s = await (await api("/api/snapshots")).json();
   const rows = Array.isArray(s) ? s.slice().reverse().map(x =>
-    `<tr><td>${(x.time || "").slice(0, 19)}</td><td>${x.short_id || (x.id || "").slice(0, 8)}</td><td>${(x.tags || []).join(",")}</td><td>${(x.paths || []).join("<br>")}</td></tr>`).join("") : "";
+    `<tr><td>${esc((x.time || "").slice(0, 19))}</td><td>${esc(x.short_id || (x.id || "").slice(0, 8))}</td><td>${esc((x.tags || []).join(","))}</td><td>${(x.paths || []).map(esc).join("<br>")}</td></tr>`).join("") : "";
   $("#snaps").innerHTML = "<tr><th>시각</th><th>ID</th><th>태그</th><th>경로</th></tr>" + rows;
 }
 
@@ -73,7 +74,7 @@ function fmtB(n) {
 async function loadHistory() {
   const h = await (await api("/api/history")).json();
   const rows = Array.isArray(h) ? h.map(r =>
-    `<tr><td>${r.StartedAt}</td><td>${r.Trigger}</td><td class="${r.Status === "ok" ? "ok" : "fail"}">${r.Status}</td><td>${fmtB(r.DataAdded)}</td></tr>`).join("") : "";
+    `<tr><td>${esc(r.StartedAt)}</td><td>${esc(r.Trigger)}</td><td class="${r.Status === "ok" ? "ok" : "fail"}">${esc(r.Status)}</td><td>${fmtB(r.DataAdded)}</td></tr>`).join("") : "";
   $("#history").innerHTML = "<tr><th>시작</th><th>트리거</th><th>상태</th><th>추가량</th></tr>" + rows;
 }
 

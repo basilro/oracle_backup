@@ -16,9 +16,14 @@ log "=== backup start host=$HOST_TAG ==="
 START=$(date +%s)
 STAGE="$STAGING_ROOT/$(date -u +%Y%m%dT%H%M%SZ)"
 
+# Guard against catastrophic wipe before any rm -rf touches STAGING_ROOT.
+case "$STAGING_ROOT" in
+  /|/home|/var|/etc|/root|""|*..*) die "unsafe STAGING_ROOT: $STAGING_ROOT" ;;
+esac
 cleanup_staging() { rm -rf "${STAGING_ROOT:?}"/* 2>/dev/null || true; }
-trap 'ec=$?; cleanup_staging; on_error $LINENO' ERR
-trap 'cleanup_staging' EXIT
+# Capture the real exit code in the ERR trap BEFORE cleanup_staging clobbers $?.
+trap 'ec=$?; db_summary_finalize; cleanup_staging; on_error "$LINENO" "$ec"' ERR
+trap 'db_summary_finalize; cleanup_staging' EXIT
 cleanup_staging                       # Phase0: 시작 시 잔여 정리(중단된 이전 런 대비)
 mkdir -p "$STAGE"
 

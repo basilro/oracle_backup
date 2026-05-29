@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -75,8 +76,8 @@ var pathSafeRe = regexp.MustCompile(`^[A-Za-z0-9_./-]*$`)
 func safeResticPath(p string) bool { return p == "" || pathSafeRe.MatchString(p) }
 
 type Runner struct {
-	mu      sync.Mutex
-	running bool
+	gate    sync.Mutex  // serialization gate, held via TryLock/Unlock only
+	running atomic.Bool // status flag, never blocks readers
 	store   *Store
 	scripts string // /opt/backup/scripts
 	logDir  string
@@ -86,40 +87,52 @@ func NewRunner(store *Store, scripts, logDir string) *Runner {
 	return &Runner{store: store, scripts: scripts, logDir: logDir}
 }
 
-func (r *Runner) Busy() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return r.running
-}
+// Busy reports whether a run is in progress without ever blocking.
+func (r *Runner) Busy() bool { return r.running.Load() }
 
-// RunBackup executes the backup script with low priority; serialized via TryLock.
+// RunBackup executes the backup script with low priority; serialized via the gate.
 // Returns immediately; the run proceeds in a goroutine.
 func (r *Runner) RunBackup(ctx context.Context, trigger string) error {
-	if !r.mu.TryLock() {
+	if !r.gate.TryLock() {
 		return fmt.Errorf("busy")
 	}
-	r.running = true
+	r.running.Store(true)
 	go func() {
 		defer func() {
-			r.mu.Lock()
-			r.running = false
-			r.mu.Unlock()
+			r.running.Store(false)
+			r.gate.Unlock()
 		}()
-		_ = r.execBackup(ctx, trigger)
+		_ = r.execBackup(ctx, trigger, "home-backup.sh")
 	}()
 	return nil
 }
 
-func (r *Runner) execBackup(ctx context.Context, trigger string) error {
+// RunCheck runs the weekly integrity check (restic check) on the gate, async.
+func (r *Runner) RunCheck(ctx context.Context) error {
+	if !r.gate.TryLock() {
+		return fmt.Errorf("busy")
+	}
+	r.running.Store(true)
+	go func() {
+		defer func() {
+			r.running.Store(false)
+			r.gate.Unlock()
+		}()
+		_ = r.execBackup(ctx, "check", "home-check.sh")
+	}()
+	return nil
+}
+
+func (r *Runner) execBackup(ctx context.Context, trigger, script string) error {
 	id, _ := r.store.StartRun(trigger)
 	ts := time.Now().UTC().Format("20060102T150405Z")
-	logPath := filepath.Join(r.logDir, fmt.Sprintf("backup-%s.log", ts))
+	logPath := filepath.Join(r.logDir, fmt.Sprintf("%s-%s.log", trigger, ts))
 	r.store.SetLog(id, logPath)
 	lf, _ := os.Create(logPath)
 	if lf != nil {
 		defer lf.Close()
 	}
-	cmd := lowPriorityCmd(ctx, filepath.Join(r.scripts, "home-backup.sh"))
+	cmd := lowPriorityCmd(ctx, filepath.Join(r.scripts, script))
 	cmd.Env = append(os.Environ(), "LOG_FILE_OVERRIDE="+logPath)
 	if lf != nil {
 		cmd.Stdout = lf
@@ -150,15 +163,14 @@ func (r *Runner) execBackup(ctx context.Context, trigger string) error {
 
 // RunRestore runs the restore script synchronously (called by API after re-auth + path check).
 func (r *Runner) RunRestore(ctx context.Context, snap, target string, includes []string) error {
-	if !r.mu.TryLock() {
+	if !r.gate.TryLock() {
 		return fmt.Errorf("busy")
 	}
+	r.running.Store(true)
 	defer func() {
-		r.mu.Lock()
-		r.running = false
-		r.mu.Unlock()
+		r.running.Store(false)
+		r.gate.Unlock()
 	}()
-	r.running = true
 	args := []string{"restore", snap, target}
 	args = append(args, includes...)
 	cmd := lowPriorityCmd(ctx, filepath.Join(r.scripts, "home-restore.sh"), args...)

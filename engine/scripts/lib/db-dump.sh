@@ -2,12 +2,16 @@
 # DB 덤프. 컨테이너 상태(docker inspect)로 판정. 요약은 $DB_SUMMARY_FILE 에 JSON 누적.
 DYNAMIC_EXCLUDES=()
 _db_first=1
+_db_opened=0
+_db_closed=0
 db_summary_add() {  # $1=name $2=state $3=detail
     [ "$_db_first" = 1 ] && _db_first=0 || printf ',' >> "$DB_SUMMARY_FILE"
     printf '"%s":{"state":"%s","detail":"%s"}' "$1" "$2" "$3" >> "$DB_SUMMARY_FILE"
 }
-db_summary_open()  { mkdir -p "$(dirname "$DB_SUMMARY_FILE")"; _db_first=1; printf '{' > "$DB_SUMMARY_FILE"; }
-db_summary_close() { printf '}' >> "$DB_SUMMARY_FILE"; }
+db_summary_open()  { mkdir -p "$(dirname "$DB_SUMMARY_FILE")"; _db_first=1; _db_opened=1; _db_closed=0; printf '{' > "$DB_SUMMARY_FILE"; }
+db_summary_close() { [ "$_db_opened" = 1 ] && [ "$_db_closed" = 0 ] || return 0; printf '}' >> "$DB_SUMMARY_FILE"; _db_closed=1; }
+# finalize: close the JSON object even if a dump die()d mid-way (idempotent).
+db_summary_finalize() { db_summary_close 2>/dev/null || true; }
 
 container_running() { [ "$(docker inspect --format '{{.State.Running}}' "$1" 2>/dev/null)" = "true" ]; }
 container_exists()  { docker inspect "$1" >/dev/null 2>&1; }

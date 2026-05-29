@@ -14,6 +14,9 @@
 /var/lib/docker/volumes/backupstack_logs
 /var/lib/docker/volumes/backupstack_staging
 /var/lib/docker/volumes/backupstack_restoreout
+/var/lib/docker/volumes/backupstack_state/_data
+/var/lib/docker/volumes/backupstack_logs/_data
+/var/lib/docker/volumes/backupstack_restoreout/_data
 /var/lib/docker/overlay2
 /var/lib/docker/image
 /var/lib/docker/containers

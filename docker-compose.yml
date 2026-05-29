@@ -10,13 +10,14 @@ services:
       - ./secrets/rclone-rest.env:/run/rest.env:ro
     entrypoint: ["/bin/sh","-c"]
     command:
-      - 'set -a; . /run/rest.env; set +a; exec rclone serve restic --addr 0.0.0.0:8080 --user "$$RCLONE_REST_USER" --pass "$$RCLONE_REST_PASS" ${REMOTE_NAME}:backups/${HOST_TAG}'
+      - 'set -a; . /run/rest.env; set +a; exec rclone serve restic --addr 0.0.0.0:8080 --user "$$RCLONE_REST_USER" --pass "$$RCLONE_REST_PASS" ${REMOTE_NAME:?set REMOTE_NAME in .env}:backups/${HOST_TAG:?set HOST_TAG in .env}'
     healthcheck:
-      test: ["CMD","rclone","lsd","${REMOTE_NAME}:"]
+      # Probe the LOCAL restic REST listener (what engine depends on), not Google Drive.
+      test: ["CMD-SHELL","set -a; . /run/rest.env; set +a; wget -q -O /dev/null --user=\"$$RCLONE_REST_USER\" --password=\"$$RCLONE_REST_PASS\" http://127.0.0.1:8080/ || exit 1"]
       interval: 30s
-      timeout: 25s
+      timeout: 10s
       retries: 3
-      start_period: 20s
+      start_period: 15s
     restart: unless-stopped
 
   engine:
@@ -25,6 +26,8 @@ services:
     container_name: backupstack_engine
     init: true
     stop_grace_period: 90s
+    security_opt:
+      - no-new-privileges:true
     depends_on:
       rclone:
         condition: service_healthy
@@ -33,8 +36,8 @@ services:
     environment:
       TZ: Asia/Seoul
       WEB_ADMIN_USER: ${WEB_ADMIN_USER:-admin}
-      REMOTE_NAME: ${REMOTE_NAME}
-      HOST_TAG: ${HOST_TAG}
+      REMOTE_NAME: ${REMOTE_NAME:?set REMOTE_NAME in .env}
+      HOST_TAG: ${HOST_TAG:?set HOST_TAG in .env}
       ALLOW_REPO_INIT: ${ALLOW_REPO_INIT:-false}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
@@ -57,8 +60,13 @@ networks:
   backupnet:
     driver: bridge
 
+# Explicit literal volume names so excludes.txt paths match regardless of project name.
 volumes:
   backupstack_staging:
+    name: backupstack_staging
   backupstack_state:
+    name: backupstack_state
   backupstack_logs:
+    name: backupstack_logs
   backupstack_restoreout:
+    name: backupstack_restoreout

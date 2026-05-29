@@ -17,7 +17,8 @@ RUN apk add --no-cache curl bzip2 && \
 
 # --- 런타임 ---
 FROM alpine:3.19
-RUN apk add --no-cache bash docker-cli gzip curl wget tzdata coreutils util-linux findutils tini
+# tini는 compose `init: true`가 PID1로 주입하므로 이미지에서는 불필요(중복 경고 방지).
+RUN apk add --no-cache bash docker-cli gzip curl wget tzdata coreutils util-linux findutils
 COPY --from=resticstage /usr/local/bin/restic /usr/local/bin/restic
 COPY --from=gobuild /backup-engine /opt/backup/backup-engine
 COPY scripts/ /opt/backup/scripts/
@@ -26,5 +27,5 @@ COPY config.env.example /opt/backup/config.env.example
 COPY excludes.txt.example /opt/backup/excludes.txt.example
 RUN chmod +x /opt/backup/entrypoint.sh /opt/backup/scripts/*.sh
 ENV TZ=Asia/Seoul
-ENTRYPOINT ["/sbin/tini","--","/opt/backup/entrypoint.sh"]
+ENTRYPOINT ["/opt/backup/entrypoint.sh"]
 CMD ["serve"]

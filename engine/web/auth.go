@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"strings"
@@ -23,29 +24,40 @@ func checkPassword(hash, pw string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(pw)) == nil
 }
 
-// signSession returns base64(user|issued|hmac).
-func signSession(user string, issued int64, key []byte) string {
-	msg := fmt.Sprintf("%s|%d", user, issued)
+// sessionVersion derives a short token-version tag from the admin password hash,
+// so any password change (new hash) invalidates all outstanding sessions.
+func sessionVersion(adminHash string) string {
+	sum := sha256.Sum256([]byte("sessionver|" + adminHash))
+	return hex.EncodeToString(sum[:4])
+}
+
+// signSession returns base64(user|issued|ver|hmac).
+func signSession(user string, issued int64, ver string, key []byte) string {
+	msg := fmt.Sprintf("%s|%d|%s", user, issued, ver)
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(msg))
 	return base64.RawURLEncoding.EncodeToString([]byte(msg + "|" + base64.RawURLEncoding.EncodeToString(mac.Sum(nil))))
 }
 
-func verifySession(tok string, key []byte, now int64) (string, bool) {
+// verifySession checks signature, expiry, and that the embedded version matches wantVer.
+func verifySession(tok string, key []byte, now int64, wantVer string) (string, bool) {
 	raw, err := base64.RawURLEncoding.DecodeString(tok)
 	if err != nil {
 		return "", false
 	}
 	parts := strings.Split(string(raw), "|")
-	if len(parts) != 3 {
+	if len(parts) != 4 {
 		return "", false
 	}
-	user, issuedStr, sig := parts[0], parts[1], parts[2]
-	msg := user + "|" + issuedStr
+	user, issuedStr, ver, sig := parts[0], parts[1], parts[2], parts[3]
+	msg := user + "|" + issuedStr + "|" + ver
 	mac := hmac.New(sha256.New, key)
 	mac.Write([]byte(msg))
 	want := base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 	if subtle.ConstantTimeCompare([]byte(sig), []byte(want)) != 1 {
+		return "", false
+	}
+	if wantVer != "" && subtle.ConstantTimeCompare([]byte(ver), []byte(wantVer)) != 1 {
 		return "", false
 	}
 	issued, err := strconv.ParseInt(issuedStr, 10, 64)

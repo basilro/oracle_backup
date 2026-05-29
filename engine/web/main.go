@@ -24,7 +24,9 @@ func uiFS() fs.FS { sub, _ := fs.Sub(embeddedUI, "ui"); return sub }
 
 func randToken() string {
 	b := make([]byte, 24)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		log.Fatalf("crypto/rand failed: %v", err)
+	}
 	return hex.EncodeToString(b)
 }
 
@@ -93,10 +95,14 @@ func main() {
 		log.Println("WARNING: /secrets/web-admin.hash missing — login disabled until provided")
 	}
 
+	// appCtx is threaded into every backup/restore so an in-flight restic run
+	// is cancelled (SIGINT to its process group) on shutdown, releasing its lock.
+	appCtx, appCancel := context.WithCancel(context.Background())
+
 	srv := &Server{
 		store: store, runner: runner, cfgPath: cfgPath, logDir: "/var/log/backup",
 		sessionKey: loadSessionKey(), adminUser: adminUser, adminHash: adminHash,
-		restoreRoot: "/restore-out",
+		restoreRoot: "/restore-out", appCtx: appCtx,
 	}
 
 	var c *cron.Cron = cron.New(cron.WithLocation(time.Local))
@@ -107,11 +113,13 @@ func main() {
 		nc := cron.New(cron.WithLocation(time.Local))
 		cfg, err := LoadConfig(cfgPath)
 		if err == nil && cfg.SchedulerOn && cfg.BackupSchedule != "" {
-			if _, e := nc.AddFunc(cfg.BackupSchedule, func() { runner.RunBackup(context.Background(), "scheduled") }); e != nil {
+			if _, e := nc.AddFunc(cfg.BackupSchedule, func() { runner.RunBackup(appCtx, "scheduled") }); e != nil {
 				log.Printf("bad BACKUP_SCHEDULE: %v", e)
 			}
 			if cfg.CheckSchedule != "" {
-				nc.AddFunc(cfg.CheckSchedule, func() { runner.RunBackup(context.Background(), "scheduled") })
+				if _, e := nc.AddFunc(cfg.CheckSchedule, func() { runner.RunCheck(appCtx) }); e != nil {
+					log.Printf("bad CHECK_SCHEDULE: %v", e)
+				}
 			}
 			nc.Start()
 			if ents := nc.Entries(); len(ents) > 0 {
@@ -138,6 +146,7 @@ func main() {
 	}()
 	<-ctx.Done()
 	log.Println("shutting down...")
+	appCancel() // signal any in-flight restic run to stop cleanly
 	schedMu.Lock()
 	c.Stop()
 	schedMu.Unlock()

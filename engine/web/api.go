@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,7 +24,10 @@ type Server struct {
 	adminHash   string
 	reload      func()
 	restoreRoot string
+	appCtx      context.Context
 }
+
+func (s *Server) sessionVer() string { return sessionVersion(s.adminHash) }
 
 func (s *Server) writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
@@ -35,7 +40,7 @@ func (s *Server) currentUser(r *http.Request) (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	return verifySession(c.Value, s.sessionKey, time.Now().Unix())
+	return verifySession(c.Value, s.sessionKey, time.Now().Unix(), s.sessionVer())
 }
 
 func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
@@ -48,20 +53,26 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// checkCSRF validates the double-submit token and an Origin/Referer allowlist.
+// checkCSRF validates the double-submit token plus a strict same-origin check.
 func (s *Server) checkCSRF(r *http.Request) bool {
 	c, err := r.Cookie("csrf")
 	if err != nil || c.Value == "" {
 		return false
 	}
-	if r.Header.Get("X-CSRF-Token") != c.Value {
+	if subtle.ConstantTimeCompare([]byte(r.Header.Get("X-CSRF-Token")), []byte(c.Value)) != 1 {
 		return false
 	}
-	origin := r.Header.Get("Origin")
-	if origin == "" {
-		return true // same-origin non-CORS request
+	// Strict same-origin: exact Host match parsed from Origin, else Referer.
+	if o := r.Header.Get("Origin"); o != "" {
+		u, err := url.Parse(o)
+		return err == nil && u.Host == r.Host
 	}
-	return strings.HasSuffix(origin, "://"+r.Host) || strings.HasSuffix(origin, r.Host)
+	if ref := r.Header.Get("Referer"); ref != "" {
+		u, err := url.Parse(ref)
+		return err == nil && u.Host == r.Host
+	}
+	// No Origin and no Referer on a state-changing request: reject.
+	return false
 }
 
 func (s *Server) Routes() http.Handler {
@@ -94,7 +105,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid credentials", 401)
 		return
 	}
-	tok := signSession(body.User, time.Now().Unix(), s.sessionKey)
+	tok := signSession(body.User, time.Now().Unix(), s.sessionVer(), s.sessionKey)
 	http.SetCookie(w, &http.Cookie{Name: "session", Value: tok, Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode})
 	csrf := randToken()
 	http.SetCookie(w, &http.Cookie{Name: "csrf", Value: csrf, Path: "/", Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode})
@@ -266,7 +277,7 @@ func (s *Server) handleBackup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := s.currentUser(r)
-	if err := s.runner.RunBackup(context.Background(), "manual"); err != nil {
+	if err := s.runner.RunBackup(s.appCtx, "manual"); err != nil {
 		s.store.Audit(user, "backup", "busy")
 		http.Error(w, "busy", 409)
 		return
@@ -327,7 +338,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if err := s.runner.RunRestore(context.Background(), body.Snapshot, safe, body.Includes); err != nil {
+	if err := s.runner.RunRestore(s.appCtx, body.Snapshot, safe, body.Includes); err != nil {
 		s.store.Audit(user, "restore", "fail")
 		s.writeJSON(w, 500, map[string]string{"error": Redact(err.Error())})
 		return

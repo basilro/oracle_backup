@@ -14,7 +14,8 @@ setup_logging() {
     mkdir -p "$LOG_DIR" "$STATE_DIR"
     local ts; ts=$(date -u +%Y%m%dT%H%M%SZ)
     LOG_FILE="${LOG_FILE_OVERRIDE:-$LOG_DIR/backup-$ts.log}"
-    exec > >(tee -a "$LOG_FILE" | redact) 2>&1
+    # redact BEFORE tee so the persisted file never contains raw credentials
+    exec > >(redact | tee -a "$LOG_FILE") 2>&1
 }
 
 acquire_lock() {
@@ -29,15 +30,18 @@ webhook_url() { if [ -f /secrets/discord-webhook ]; then cat /secrets/discord-we
 
 notify() {  # $1=category $2=message  (자격증명/경로 미포함, 일반 카테고리만)
     local url; url=$(webhook_url); [ -n "$url" ] || return 0
+    # Discord webhooks require "content"; Slack-compat ignores extra keys.
     curl -fsS -X POST -H 'Content-Type: application/json' \
-        -d "$(printf '{"text":"[backup:%s] %s on %s"}' "$1" "$2" "${HOST_TAG:-$(hostname)}")" \
+        -d "$(printf '{"content":"[backup:%s] %s on %s","text":"[backup:%s] %s"}' "$1" "$2" "${HOST_TAG:-$(hostname)}" "$1" "$2")" \
         "$url" >/dev/null 2>&1 || warn "webhook notify failed"
 }
 
+# on_error: $1=line, $2=exit code (passed explicitly so a cleanup step in the
+# trap cannot clobber $? before we read it).
 on_error() {
-    local ec=$? ln=${1:-?}
+    local ln="${1:-?}" ec="${2:-$?}"
     record_failure "exit=$ec line=$ln"
     notify fail "run failed (exit=$ec)"
     exit "$ec"
 }
-install_error_trap() { trap 'on_error $LINENO' ERR; set -Eeuo pipefail; }
+install_error_trap() { trap 'on_error "$LINENO" "$?"' ERR; set -Eeuo pipefail; }
