@@ -8,15 +8,8 @@
 </head>
 <body>
 <div id="app">
-  <header><h1>백업 대시보드</h1><span id="host"></span><button id="logout" hidden>로그아웃</button></header>
-  <section id="login">
-    <h2>로그인</h2>
-    <input id="u" placeholder="아이디" autocomplete="username">
-    <input id="p" type="password" placeholder="비밀번호" autocomplete="current-password">
-    <button id="loginBtn">로그인</button>
-    <div id="loginErr" class="fail"></div>
-  </section>
-  <main id="dash" hidden>
+  <header><h1>백업 대시보드</h1><span id="host"></span><button id="logout">로그아웃</button></header>
+  <main id="dash">
     <div class="card" id="status"></div>
     <div class="card"><h2>설정</h2><div id="config"></div><button id="saveCfg">설정 저장</button> <span id="cfgMsg"></span></div>
     <div class="card"><h2>스냅샷</h2><table id="snaps"></table></div>

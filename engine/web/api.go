@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"os"
@@ -80,6 +81,10 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
 	mux.HandleFunc("/login", s.handleLogin)
 	mux.HandleFunc("/logout", s.handleLogout)
+	// static assets (no auth — markup/JS/CSS only, all data behind /api auth)
+	mux.HandleFunc("/app.js", s.staticFile("app.js", "application/javascript; charset=utf-8"))
+	mux.HandleFunc("/login.js", s.staticFile("login.js", "application/javascript; charset=utf-8"))
+	mux.HandleFunc("/style.css", s.staticFile("style.css", "text/css; charset=utf-8"))
 	mux.HandleFunc("/api/status", s.requireAuth(s.handleStatus))
 	mux.HandleFunc("/api/snapshots", s.requireAuth(s.handleSnapshots))
 	mux.HandleFunc("/api/snapshot-ls", s.requireAuth(s.handleSnapshotLs))
@@ -88,11 +93,49 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/config", s.requireAuth(s.handleConfig))
 	mux.HandleFunc("/api/backup", s.requireAuth(s.handleBackup))
 	mux.HandleFunc("/api/restore", s.requireAuth(s.handleRestore))
-	mux.Handle("/", http.FileServer(http.FS(uiFS())))
+	mux.HandleFunc("/", s.handleRoot)
 	return mux
 }
 
+// serveUI writes an embedded UI file with the given content type.
+func (s *Server) serveUI(w http.ResponseWriter, name, ctype string) {
+	b, err := fs.ReadFile(uiFS(), name)
+	if err != nil {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", ctype)
+	w.Write(b)
+}
+
+func (s *Server) staticFile(name, ctype string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) { s.serveUI(w, name, ctype) }
+}
+
+// handleRoot gates "/": the dashboard is served only to authenticated users,
+// otherwise the browser is redirected to the standalone login page.
+func (s *Server) handleRoot(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path != "/" {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if _, ok := s.currentUser(r); !ok {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	s.serveUI(w, "index.html", "text/html; charset=utf-8")
+}
+
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		// already logged in → go straight to the dashboard
+		if _, ok := s.currentUser(r); ok {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+		s.serveUI(w, "login.html", "text/html; charset=utf-8")
+		return
+	}
 	if r.Method != "POST" {
 		http.Error(w, "method", 405)
 		return

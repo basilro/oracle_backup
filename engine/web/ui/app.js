@@ -11,26 +11,16 @@ function getCsrf() {
   const m = document.cookie.match(/csrf=([^;]+)/);
   if (m) csrf = m[1];
 }
+function toLogin() { location.href = "/login"; }
 async function api(p, o = {}) {
   o.headers = Object.assign({ "Content-Type": "application/json", "X-CSRF-Token": csrf }, o.headers || {});
-  return fetch(p, o);
-}
-
-async function login() {
-  const r = await api("/login", { method: "POST", body: JSON.stringify({ User: $("#u").value, Pass: $("#p").value }) });
-  if (r.ok) { csrf = (await r.json()).csrf; show(); }
-  else { $("#loginErr").textContent = "로그인 실패"; }
-}
-
-async function show() {
-  getCsrf();
-  $("#login").hidden = true; $("#dash").hidden = false; $("#logout").hidden = false;
-  await Promise.all([loadStatus(), loadConfig(), loadSnaps(), loadHistory()]);
+  const r = await fetch(p, o);
+  if (r.status === 401) { toLogin(); throw new Error("unauthorized"); }
+  return r;
 }
 
 async function loadStatus() {
   const r = await api("/api/status");
-  if (r.status === 401) { location.reload(); return; }
   const s = await r.json();
   $("#status").innerHTML = `<h2>상태</h2>마지막 성공: <b>${esc(s.last_success) || "-"}</b><br>다음 예정: ${esc(s.next_run) || "(스케줄러 꺼짐)"}<br>진행 중: ${s.busy ? "예" : "아니오"}` +
     (s.last_failure ? `<br><span class="fail">마지막 실패: ${esc(s.last_failure)}</span>` : "");
@@ -84,16 +74,18 @@ async function backup() {
   setTimeout(() => { loadStatus(); loadHistory(); }, 3000);
 }
 
-async function logout() { await api("/logout", { method: "POST" }); location.reload(); }
+async function logout() {
+  try { await api("/logout", { method: "POST" }); } catch (e) { /* ignore */ }
+  toLogin();
+}
 
-$("#loginBtn").onclick = login;
 $("#saveCfg").onclick = saveCfg;
 $("#backupNow").onclick = backup;
 $("#logout").onclick = logout;
-$("#p").addEventListener("keydown", e => { if (e.key === "Enter") login(); });
 
 (async () => {
   getCsrf();
-  const r = await api("/api/status");
-  if (r.ok) show();
+  try {
+    await Promise.all([loadStatus(), loadConfig(), loadSnaps(), loadHistory()]);
+  } catch (e) { /* 401 already redirected to /login */ }
 })();
