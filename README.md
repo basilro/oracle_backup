@@ -3,14 +3,14 @@
 `/home` + Docker named volume을 **암호화·중복제거** 백업하고, **웹 대시보드**(설정·이력 조회 + 즉시 백업/복원)를 제공하는 self-contained Docker 스택. 다른 서버에 "이미지 + 설정"만 떨궈 빠르게 이식하기 위한 것.
 
 - 백업 엔진: 검증된 bash 스크립트(restic 0.16.5) — DB 일관성 덤프 + 파일 백업
-- 저장소: rclone `serve restic`(HTTP) 경유 Google Drive, restic `rest:` 백엔드로 접근
+- 저장소: rclone(stdio) 경유 Google Drive — restic이 rclone을 자식 프로세스로 직접 실행(`rclone:` 백엔드)
 - 웹: Go 단일 바이너리(로그인 + 조회 + 백업/복원), 내장 cron 스케줄러
-- 구성: 컨테이너 2개(`rclone`, `engine`), 전용 내부 네트워크
+- 구성: **단일 컨테이너** `engine` (restic + rclone + bash 엔진 + Go 웹/스케줄러)
 
 ```
-┌─ rclone   : rclone serve restic (Drive 토큰은 여기에만)
-└─ engine   : restic + bash 엔진 + Go 웹/스케줄러 (docker.sock + /home:ro 마운트)
-              └─ 웹 UI :8088  (로그인)
+engine 컨테이너 (docker.sock + /home:ro 마운트, 웹 UI :8088)
+  restic --(stdio)--> rclone --> Google Drive
+  rclone.conf(ro 마운트)에만 Drive 토큰 존재
 ```
 
 ---
@@ -30,10 +30,11 @@
 | 파일 | 내용 |
 |---|---|
 | `repo-pass` | restic 저장소 비밀번호 (**분실 시 복구 불가**) |
-| `rclone-rest.env` | `RCLONE_REST_USER` / `RCLONE_REST_PASS` (rclone↔restic 내부 인증) |
 | `web-admin.hash` | 웹 관리자 비밀번호의 bcrypt 해시 |
 | `db-creds.env` | DB 자격증명(`PG_USER`,`MONGO_USER/PASS`,`REDIS_PASS`) — DB 백업 시 |
 | `discord-webhook` | 실패/성공 알림 webhook URL (선택) |
+
+> `rclone/rclone.conf`(Drive 토큰)는 `secrets/`가 아니라 별도로 두고 ro 마운트됩니다.
 
 ---
 
@@ -52,8 +53,6 @@ cp <인증된 rclone.conf> rclone/rclone.conf
 
 # 시크릿 생성
 openssl rand -base64 48 > secrets/repo-pass            # 신규 저장소면 새로 생성, 기존 재사용이면 동일 값
-printf 'RCLONE_REST_USER=restuser\nRCLONE_REST_PASS=%s\n' \
-  "$(tr -dc 'A-Za-z0-9_-' </dev/urandom | head -c 32)" > secrets/rclone-rest.env
 docker run --rm httpd:2.4-alpine htpasswd -nbBC 12 admin '원하는관리자비번' | cut -d: -f2 > secrets/web-admin.hash
 # (DB 백업 시) secrets/db-creds.env 작성, (알림 시) secrets/discord-webhook 작성
 chmod -R go-rwx secrets
@@ -147,7 +146,7 @@ docker compose restart engine     # 또는 웹 UI에서 저장
 
 | 증상 | 조치 |
 |---|---|
-| rclone unhealthy | `docker compose logs rclone` — rclone.conf/REMOTE_NAME/토큰 확인. `docker compose run --rm engine preflight` |
+| 저장소 접근 실패 | `docker compose run --rm engine preflight` — rclone.conf/REMOTE_NAME/HOST_TAG/토큰 확인 |
 | `repo unreachable` 로 백업 거부 | 네트워크/토큰 문제. 저장소가 실제 없을 때만 `ALLOW_REPO_INIT=true`로 init |
 | 로그인 실패 | `secrets/web-admin.hash` 가 bcrypt 해시인지, `WEB_ADMIN_USER` 일치 확인 |
 | `busy`(409) | 다른 백업/복원 진행 중 |
@@ -156,5 +155,5 @@ docker compose restart engine     # 또는 웹 UI에서 저장
 
 ## 8. 보안 메모
 - engine은 `docker.sock` 보유 = 사실상 root. 웹은 LAN+로그인 전제, 위험 액션 재인증. 외부 노출 시 프록시+TLS.
-- rclone REST는 전용 내부망 + user/pass + restic 암호화(이중). 내부 HTTP 평문은 격리망 한정으로 허용.
-- 모든 시크릿은 ro 파일, git 제외, 로그 마스킹.
+- Drive 토큰(`rclone.conf`)·restic 비밀번호 등 모든 시크릿은 ro 마운트, git 제외, 단일 신뢰 컨테이너 내에서만 사용.
+- restic↔rclone는 컨테이너 내부 stdio 파이프(네트워크 미경유).

@@ -6,6 +6,9 @@ RUN go mod download 2>/dev/null || true
 COPY web/ ./
 RUN go mod tidy && CGO_ENABLED=0 go build -trimpath -o /backup-engine .
 
+# --- rclone 바이너리 (핀: 1.66) ---
+FROM rclone/rclone:1.66 AS rclonebin
+
 # --- restic 핀 (0.16.5) ---
 FROM alpine:3.19 AS resticstage
 ARG RESTIC_VER=0.16.5
@@ -18,8 +21,9 @@ RUN apk add --no-cache curl bzip2 && \
 # --- 런타임 ---
 FROM alpine:3.19
 # tini는 compose `init: true`가 PID1로 주입하므로 이미지에서는 불필요(중복 경고 방지).
-RUN apk add --no-cache bash docker-cli gzip curl wget tzdata coreutils util-linux findutils
+RUN apk add --no-cache bash docker-cli gzip curl wget tzdata coreutils util-linux findutils ca-certificates fuse3
 COPY --from=resticstage /usr/local/bin/restic /usr/local/bin/restic
+COPY --from=rclonebin /usr/local/bin/rclone /usr/local/bin/rclone
 COPY --from=gobuild /backup-engine /opt/backup/backup-engine
 COPY scripts/ /opt/backup/scripts/
 COPY entrypoint.sh /opt/backup/entrypoint.sh

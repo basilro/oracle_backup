@@ -1,27 +1,4 @@
 services:
-  rclone:
-    image: ${RCLONE_IMAGE:-rclone/rclone:1.66}
-    container_name: backupstack_rclone
-    networks: [backupnet]
-    environment:
-      RCLONE_CONFIG: /config/rclone/rclone.conf
-    volumes:
-      - ./rclone/rclone.conf:/config/rclone/rclone.conf:ro
-      - ./secrets/rclone-rest.env:/run/rest.env:ro
-    entrypoint: ["/bin/sh","-c"]
-    command:
-      - 'set -a; . /run/rest.env; set +a; exec rclone serve restic --addr 0.0.0.0:8080 --user "$$RCLONE_REST_USER" --pass "$$RCLONE_REST_PASS" ${REMOTE_NAME:?set REMOTE_NAME in .env}:backups/${HOST_TAG:?set HOST_TAG in .env}'
-    healthcheck:
-      # GET /config via the local REST endpoint (URL-embedded creds; busybox wget
-      # lacks --user). 200 only when the restic repo config is reachable through
-      # rclone -> Drive, validating the actual backend, not just the listener.
-      test: ["CMD-SHELL","set -a; . /run/rest.env; set +a; wget -q -O /dev/null \"http://$$RCLONE_REST_USER:$$RCLONE_REST_PASS@127.0.0.1:8080/config\" || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 15s
-    restart: unless-stopped
-
   engine:
     build: ./engine
     image: backupstack-engine:local
@@ -30,10 +7,6 @@ services:
     stop_grace_period: 90s
     security_opt:
       - no-new-privileges:true
-    depends_on:
-      rclone:
-        condition: service_healthy
-    networks: [backupnet]
     ports: ["${WEB_PORT:-8088}:8088"]
     environment:
       TZ: Asia/Seoul
@@ -41,6 +14,7 @@ services:
       REMOTE_NAME: ${REMOTE_NAME:?set REMOTE_NAME in .env}
       HOST_TAG: ${HOST_TAG:?set HOST_TAG in .env}
       ALLOW_REPO_INIT: ${ALLOW_REPO_INIT:-false}
+      RCLONE_CONFIG: /etc/rclone/rclone.conf
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /home:/home:ro
@@ -48,6 +22,7 @@ services:
       - backupstack_staging:/home/docker/_backup_staging
       - ./config:/config
       - ./secrets:/secrets:ro
+      - ./rclone/rclone.conf:/etc/rclone/rclone.conf:ro
       - backupstack_state:/state
       - backupstack_logs:/var/log/backup
       - backupstack_restoreout:/restore-out
@@ -57,10 +32,6 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
-
-networks:
-  backupnet:
-    driver: bridge
 
 # Explicit literal volume names so excludes.txt paths match regardless of project name.
 volumes:

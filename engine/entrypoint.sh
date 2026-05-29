@@ -4,13 +4,13 @@ set -Eeuo pipefail
 [ -f /config/config.env ]   || cp /opt/backup/config.env.example  /config/config.env
 [ -f /config/excludes.txt ] || cp /opt/backup/excludes.txt.example /config/excludes.txt
 
-# rclone REST 자격증명 -> repo URL (비로그)
-if [ -f /secrets/rclone-rest.env ]; then set -a; . /secrets/rclone-rest.env; set +a; fi
-export RESTIC_REPOSITORY="rest:http://${RCLONE_REST_USER:-}:${RCLONE_REST_PASS:-}@rclone:8080/"
+# 단일 컨테이너: restic이 rclone을 stdio로 직접 실행(별도 rclone 서비스 불필요).
+# 자격증명은 rclone.conf(ro 마운트)에만 존재 — repo URL에는 시크릿 없음.
+export RCLONE_CONFIG="${RCLONE_CONFIG:-/etc/rclone/rclone.conf}"
+export RESTIC_REPOSITORY="rclone:${REMOTE_NAME:?set REMOTE_NAME}:backups/${HOST_TAG:?set HOST_TAG}"
 export RESTIC_PASSWORD_FILE="/secrets/repo-pass"
 
-mask() { sed -E 's#(rest:https?://)[^:@/]+:[^@/]+@#\1***:***@#g'; }
-echo "[entrypoint] repo=$(echo "$RESTIC_REPOSITORY" | mask)  host=${HOST_TAG:-?}  init=${ALLOW_REPO_INIT:-false}"
+echo "[entrypoint] repo=${RESTIC_REPOSITORY}  rclone_config=${RCLONE_CONFIG}  init=${ALLOW_REPO_INIT:-false}"
 
 cmd="${1:-serve}"
 case "$cmd" in
