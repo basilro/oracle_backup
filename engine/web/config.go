@@ -117,7 +117,7 @@ func (c *Config) Save(path string) error {
 	var b strings.Builder
 	for _, o := range c.order {
 		if v, ok := c.raw[o]; ok && o != "" && !strings.HasPrefix(o, "#") {
-			fmt.Fprintf(&b, "%s=%s\n", o, v)
+			fmt.Fprintf(&b, "%s=%s\n", o, quoteVal(v))
 		} else {
 			b.WriteString(o + "\n")
 		}
@@ -134,4 +134,13 @@ func boolStr(b bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+// quoteVal double-quotes a value containing whitespace so `source config.env`
+// in bash treats it as a single token (e.g. a cron expression "0 3 * * *").
+func quoteVal(v string) string {
+	if v != "" && !strings.ContainsAny(v, " \t") {
+		return v
+	}
+	return `"` + strings.ReplaceAll(v, `"`, `\"`) + `"`
 }

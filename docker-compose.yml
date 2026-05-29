@@ -12,8 +12,10 @@ services:
     command:
       - 'set -a; . /run/rest.env; set +a; exec rclone serve restic --addr 0.0.0.0:8080 --user "$$RCLONE_REST_USER" --pass "$$RCLONE_REST_PASS" ${REMOTE_NAME:?set REMOTE_NAME in .env}:backups/${HOST_TAG:?set HOST_TAG in .env}'
     healthcheck:
-      # Probe the LOCAL restic REST listener (what engine depends on), not Google Drive.
-      test: ["CMD-SHELL","set -a; . /run/rest.env; set +a; wget -q -O /dev/null --user=\"$$RCLONE_REST_USER\" --password=\"$$RCLONE_REST_PASS\" http://127.0.0.1:8080/ || exit 1"]
+      # GET /config via the local REST endpoint (URL-embedded creds; busybox wget
+      # lacks --user). 200 only when the restic repo config is reachable through
+      # rclone -> Drive, validating the actual backend, not just the listener.
+      test: ["CMD-SHELL","set -a; . /run/rest.env; set +a; wget -q -O /dev/null \"http://$$RCLONE_REST_USER:$$RCLONE_REST_PASS@127.0.0.1:8080/config\" || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3

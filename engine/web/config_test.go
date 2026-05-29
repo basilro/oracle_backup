@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -23,6 +24,15 @@ func TestConfigRoundTrip(t *testing.T) {
 	c2, _ := LoadConfig(p)
 	if c2.KeepDaily != 14 {
 		t.Fatal("save roundtrip")
+	}
+	if c2.BackupSchedule != "0 3 * * *" {
+		t.Fatalf("schedule roundtrip: %q", c2.BackupSchedule)
+	}
+	// On disk the spaced cron value MUST be quoted so `source config.env` in bash
+	// treats it as one token (regression: unquoted broke the backup script).
+	raw, _ := os.ReadFile(p)
+	if !strings.Contains(string(raw), `BACKUP_SCHEDULE="0 3 * * *"`) {
+		t.Fatalf("cron value not quoted on disk:\n%s", raw)
 	}
 }
 
