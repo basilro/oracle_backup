@@ -26,31 +26,48 @@ func safeRestoreTarget(root, target string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	rootAbs, _ := filepath.Abs(root)
-	// EvalSymlinks on the nearest existing ancestor
-	probe := abs
-	for {
-		if _, err := os.Stat(probe); err == nil {
-			break
-		}
-		parent := filepath.Dir(probe)
-		if parent == probe {
-			break
-		}
-		probe = parent
+	rootAbs, _ := filepath.Abs(filepath.Clean(root))
+	// 1. Lexical confinement: target must equal root or live under it.
+	if !within(rootAbs, abs) {
+		return "", fmt.Errorf("outside root")
 	}
-	if realProbe, err := filepath.EvalSymlinks(probe); err == nil {
-		if realProbe != rootAbs && !within(rootAbs, realProbe) {
+	// 2. Symlink safety: the deepest EXISTING ancestor of the target, after
+	//    resolving symlinks, must stay on the same lineage as the resolved root
+	//    (within it, equal to it, or an ancestor of it). A symlink in the path
+	//    that diverges elsewhere (e.g. -> /etc) is rejected.
+	realRoot := rootAbs
+	if r, e := filepath.EvalSymlinks(rootAbs); e == nil {
+		realRoot = r
+	}
+	anc := abs
+	for {
+		if _, e := os.Stat(anc); e == nil {
+			break
+		}
+		parent := filepath.Dir(anc)
+		if parent == anc {
+			break
+		}
+		anc = parent
+	}
+	if realAnc, e := filepath.EvalSymlinks(anc); e == nil {
+		if realAnc != realRoot && !within(realRoot, realAnc) && !within(realAnc, realRoot) {
 			return "", fmt.Errorf("escapes root via symlink")
 		}
-	}
-	if abs != rootAbs && !within(rootAbs, abs) {
-		return "", fmt.Errorf("outside root")
 	}
 	return abs, nil
 }
 
-func within(root, p string) bool { return strings.HasPrefix(p, root+string(os.PathSeparator)) }
+// within reports whether child is parent or is contained under parent.
+func within(parent, child string) bool {
+	if parent == child {
+		return true
+	}
+	if !strings.HasSuffix(parent, string(os.PathSeparator)) {
+		parent += string(os.PathSeparator)
+	}
+	return strings.HasPrefix(child, parent)
+}
 
 // safeResticPath rejects shell/space metacharacters in an ls path argument.
 var pathSafeRe = regexp.MustCompile(`^[A-Za-z0-9_./-]*$`)
