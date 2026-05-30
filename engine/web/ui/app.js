@@ -1,3 +1,4 @@
+const BUILD = "ui-2026-05-30b";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -164,13 +165,21 @@ $("#saveCfg").onclick = saveCfg;
 $("#backupNow").onclick = backup;
 $("#logout").onclick = logout;
 
+function failCard(sel, e) {
+  if (String(e && e.message) === "unauthorized") return; // redirecting to /login
+  const el = $(sel);
+  if (el) el.innerHTML = `<div class="empty" style="color:var(--fail)">불러오기 실패: ${esc(e && e.message || e)}</div>`;
+}
+
 (async () => {
+  const b = $("#build"); if (b) b.textContent = BUILD;
   getCsrf();
   // Fast panels render immediately; the slow snapshot list (restic→Drive) loads
   // in the background and updates the strip count when ready.
   $("#snaps").innerHTML = '<tbody><tr><td class="empty">불러오는 중…</td></tr></tbody>';
-  loadStatus().catch(() => {});
-  loadConfig().catch(() => {});
-  loadHistory().catch(() => {});
-  loadSnaps().then(() => { if (window._busyAtLoad) pollUntilIdle(); }).catch(() => {});
+  $("#config").innerHTML = '<div class="empty">불러오는 중…</div>';
+  loadStatus().catch(e => failCard("#strip", e));
+  loadConfig().catch(e => failCard("#config", e));
+  loadHistory().catch(e => failCard("#history", e));
+  loadSnaps().then(() => { if (window._busyAtLoad) pollUntilIdle(); }).catch(e => failCard("#snaps", e));
 })();
