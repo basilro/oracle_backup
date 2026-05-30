@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-05-30c";
+const BUILD = "ui-2026-05-30d";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -173,6 +173,18 @@ function pollUntilIdle() {
   }, 4000);
 }
 
+/* ---------- excludes ---------- */
+async function loadExcludes() {
+  const t = await (await api("/api/excludes")).text();
+  $("#excludes").value = t;
+}
+async function saveExcludes() {
+  const m = $("#exMsg");
+  const r = await api("/api/excludes", { method: "PUT", headers: { "Content-Type": "text/plain" }, body: $("#excludes").value });
+  if (r.ok) { m.textContent = "✓ 저장됨 (다음 백업부터 적용)"; m.className = "msg ok"; }
+  else { m.textContent = "✕ 실패 (" + r.status + ")"; m.className = "msg fail"; }
+}
+
 /* ---------- restore ---------- */
 async function restore() {
   const snap = $("#rsnap").value;
@@ -207,6 +219,7 @@ function downloadRestore() { window.location.href = "/api/restore-download"; }
 async function logout() { try { await api("/logout", { method: "POST" }); } catch (e) {} toLogin(); }
 
 $("#saveCfg").onclick = saveCfg;
+$("#saveExcludes").onclick = saveExcludes;
 $("#backupNow").onclick = backup;
 $("#restoreBtn").onclick = restore;
 $("#rdl").onclick = downloadRestore;
@@ -227,6 +240,7 @@ function failCard(sel, e) {
   $("#config").innerHTML = '<div class="empty">불러오는 중…</div>';
   loadStatus().catch(e => failCard("#strip", e));
   loadConfig().catch(e => failCard("#config", e));
+  loadExcludes().catch(() => {});
   loadHistory().catch(e => failCard("#history", e));
   loadSnaps().then(() => { if (window._busyAtLoad) pollUntilIdle(); }).catch(e => failCard("#snaps", e));
 })();

@@ -94,6 +94,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/history", s.requireAuth(s.handleHistory))
 	mux.HandleFunc("/api/logs", s.requireAuth(s.handleLogs))
 	mux.HandleFunc("/api/config", s.requireAuth(s.handleConfig))
+	mux.HandleFunc("/api/excludes", s.requireAuth(s.handleExcludes))
 	mux.HandleFunc("/api/backup", s.requireAuth(s.handleBackup))
 	mux.HandleFunc("/api/restore", s.requireAuth(s.handleRestore))
 	mux.HandleFunc("/api/restore-download", s.requireAuth(s.handleRestoreDownload))
@@ -316,6 +317,46 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			s.reload()
 		}
 		s.writeJSON(w, 200, map[string]string{"status": "saved"})
+		return
+	}
+	http.Error(w, "method", 405)
+}
+
+// handleExcludes reads/writes /config/excludes.txt (restic --exclude-file).
+// Changes apply on the next backup run; content is opaque exclude patterns.
+func (s *Server) handleExcludes(w http.ResponseWriter, r *http.Request) {
+	const path = "/config/excludes.txt"
+	if r.Method == http.MethodGet {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			b = []byte("")
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write(b)
+		return
+	}
+	if r.Method == http.MethodPut {
+		if !s.checkCSRF(r) {
+			http.Error(w, "csrf", 403)
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, 256*1024))
+		if err != nil {
+			http.Error(w, "read", 400)
+			return
+		}
+		tmp := path + ".tmp"
+		if err := os.WriteFile(tmp, body, 0644); err != nil {
+			http.Error(w, "save", 500)
+			return
+		}
+		if err := os.Rename(tmp, path); err != nil {
+			http.Error(w, "save", 500)
+			return
+		}
+		user, _ := s.currentUser(r)
+		s.store.Audit(user, "excludes-update", "ok")
+		w.WriteHeader(204)
 		return
 	}
 	http.Error(w, "method", 405)

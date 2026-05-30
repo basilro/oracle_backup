@@ -49,6 +49,16 @@
     </div>
 
     <div class="card c5">
+      <h2>백업 대상 · 제외 규칙</h2>
+      <p class="dim" style="margin:0 0 12px;font-size:.86rem">백업 루트는 <code>/home</code> · <code>/var/lib/docker/volumes</code> 로 고정입니다(컨테이너 마운트 기반). 그 안에서 <b>무엇을 제외할지</b>를 아래에서 정합니다. 한 줄에 하나, 변경은 <b>다음 백업부터</b> 적용됩니다.</p>
+      <textarea id="excludes" spellcheck="false" placeholder="**/cache&#10;/home/docker/jenkins/workspace"></textarea>
+      <div class="row-actions">
+        <button id="saveExcludes" class="btn-primary">제외 규칙 저장</button>
+        <span id="exMsg" class="msg"></span>
+      </div>
+    </div>
+
+    <div class="card c5">
       <h2>복원</h2>
       <p class="dim" style="margin:0 0 14px;font-size:.86rem">선택한 스냅샷의 파일을 <code>/restore-out</code>(안전한 임시 영역)으로 복원합니다. 라이브 데이터는 절대 덮어쓰지 않습니다.</p>
       <div class="field"><div class="lab">스냅샷</div><div class="ctl"><select id="rsnap"></select></div></div>
