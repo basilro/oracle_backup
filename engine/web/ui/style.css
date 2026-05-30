@@ -144,12 +144,14 @@ main {
 .numwrap input { width: 92px; text-align: right; border: 0; background: transparent; }
 .numwrap .unit { padding: 0 10px 0 4px; color: var(--faint); font-family: var(--font-mono); font-size: .78rem; }
 
-input[type=text], input[type=number], input[type=password], .cron {
+input[type=text], input[type=number], input[type=password], .cron, select {
   font-family: var(--font-mono); font-size: .9rem; color: var(--text);
   background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
   padding: 9px 11px; outline: none; transition: border-color .15s, box-shadow .15s;
 }
-input:focus, .cron:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+input:focus, .cron:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+select { max-width: min(280px, 60vw); cursor: pointer; }
+code { font-family: var(--font-mono); font-size: .85em; background: var(--bg); border: 1px solid var(--border-soft); border-radius: 5px; padding: 1px 6px; color: var(--accent); }
 .cron { width: 150px; text-align: center; letter-spacing: .04em; }
 
 /* toggle */

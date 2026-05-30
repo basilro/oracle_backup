@@ -1,9 +1,12 @@
 package main
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"crypto/subtle"
 	"encoding/json"
+	"io"
 	"io/fs"
 	"net/http"
 	"net/url"
@@ -93,6 +96,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/config", s.requireAuth(s.handleConfig))
 	mux.HandleFunc("/api/backup", s.requireAuth(s.handleBackup))
 	mux.HandleFunc("/api/restore", s.requireAuth(s.handleRestore))
+	mux.HandleFunc("/api/restore-download", s.requireAuth(s.handleRestoreDownload))
 	mux.HandleFunc("/", s.handleRoot)
 	return mux
 }
@@ -388,6 +392,9 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	// Clear the scratch area so the result (and its download) reflects only this restore.
+	os.RemoveAll(s.restoreRoot)
+	os.MkdirAll(s.restoreRoot, 0755)
 	if err := s.runner.RunRestore(s.appCtx, body.Snapshot, safe, body.Includes); err != nil {
 		s.store.Audit(user, "restore", "fail")
 		s.writeJSON(w, 500, map[string]string{"error": Redact(err.Error())})
@@ -395,4 +402,51 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.Audit(user, "restore", "ok")
 	s.writeJSON(w, 200, map[string]string{"status": "restored", "target": safe})
+}
+
+// handleRestoreDownload streams the current /restore-out contents as a .tar.gz.
+func (s *Server) handleRestoreDownload(w http.ResponseWriter, r *http.Request) {
+	root := s.restoreRoot
+	entries, err := os.ReadDir(root)
+	if err != nil || len(entries) == 0 {
+		http.Error(w, "복원 결과가 없습니다", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", `attachment; filename="restore-out.tar.gz"`)
+	gz := gzip.NewWriter(w)
+	defer gz.Close()
+	tw := tar.NewWriter(gz)
+	defer tw.Close()
+	filepath.Walk(root, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info == nil {
+			return nil
+		}
+		rel, e := filepath.Rel(root, p)
+		if e != nil || rel == "." {
+			return nil
+		}
+		hdr, e := tar.FileInfoHeader(info, "")
+		if e != nil {
+			return nil
+		}
+		hdr.Name = filepath.ToSlash(rel)
+		if info.IsDir() {
+			hdr.Name += "/"
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+		if info.Mode().IsRegular() {
+			f, e := os.Open(p)
+			if e != nil {
+				return nil
+			}
+			defer f.Close()
+			io.Copy(tw, f)
+		}
+		return nil
+	})
+	user, _ := s.currentUser(r)
+	s.store.Audit(user, "restore-download", "ok")
 }

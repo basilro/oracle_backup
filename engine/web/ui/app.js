@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-05-30b";
+const BUILD = "ui-2026-05-30c";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -112,9 +112,23 @@ async function saveCfg() {
 }
 
 /* ---------- snapshots / history ---------- */
+function fillSnapSelect(snaps) {
+  const sel = $("#rsnap"); if (!sel) return;
+  if (Array.isArray(snaps) && snaps.length) {
+    sel.innerHTML = snaps.slice().reverse().map(x => {
+      const id = x.short_id || (x.id || "").slice(0, 8);
+      return `<option value="${esc(id)}">${esc((x.time || "").slice(0, 16).replace("T", " "))} · ${esc(id)}</option>`;
+    }).join("");
+    sel.disabled = false;
+  } else {
+    sel.innerHTML = `<option value="">스냅샷 없음</option>`; sel.disabled = true;
+  }
+}
+
 async function loadSnaps(fresh) {
   const s = await (await api("/api/snapshots" + (fresh ? "?fresh=1" : ""))).json();
   snapCount = Array.isArray(s) ? s.length : "—";
+  fillSnapSelect(s);
   loadStatus();  // refresh strip's snapshot count once known
   const rows = Array.isArray(s) && s.length
     ? s.slice().reverse().map(x => `<tr>
@@ -159,10 +173,43 @@ function pollUntilIdle() {
   }, 4000);
 }
 
+/* ---------- restore ---------- */
+async function restore() {
+  const snap = $("#rsnap").value;
+  const pass = $("#rpass").value;
+  const paths = $("#rpaths").value.split(/[\n,]/).map(s => s.trim()).filter(Boolean);
+  const msg = $("#rmsg");
+  if (!snap) { msg.textContent = "스냅샷을 선택하세요"; msg.className = "msg fail"; return; }
+  if (!pass) { msg.textContent = "비밀번호를 입력하세요"; msg.className = "msg fail"; return; }
+  const btn = $("#restoreBtn");
+  btn.disabled = true; msg.textContent = "복원 중… (크기에 따라 시간이 걸립니다)"; msg.className = "msg";
+  $("#rdl").style.display = "none";
+  try {
+    const r = await api("/api/restore", { method: "POST", body: JSON.stringify({ Snapshot: snap, Includes: paths, Password: pass, Confirm: "RESTORE" }) });
+    if (r.ok) {
+      const d = await r.json();
+      msg.textContent = "✓ 복원 완료 → " + d.target; msg.className = "msg ok";
+      $("#rpass").value = ""; $("#rdl").style.display = "";
+    } else if (r.status === 401) {
+      msg.textContent = "✕ 비밀번호가 올바르지 않습니다"; msg.className = "msg fail";
+    } else if (r.status === 409) {
+      msg.textContent = "✕ 다른 작업 진행 중"; msg.className = "msg fail";
+    } else {
+      msg.textContent = "✕ " + (await r.text()); msg.className = "msg fail";
+    }
+  } catch (e) {
+    if (String(e.message) !== "unauthorized") { msg.textContent = "✕ " + e.message; msg.className = "msg fail"; }
+  }
+  btn.disabled = false;
+}
+function downloadRestore() { window.location.href = "/api/restore-download"; }
+
 async function logout() { try { await api("/logout", { method: "POST" }); } catch (e) {} toLogin(); }
 
 $("#saveCfg").onclick = saveCfg;
 $("#backupNow").onclick = backup;
+$("#restoreBtn").onclick = restore;
+$("#rdl").onclick = downloadRestore;
 $("#logout").onclick = logout;
 
 function failCard(sel, e) {

@@ -49,6 +49,19 @@
     </div>
 
     <div class="card c5">
+      <h2>복원</h2>
+      <p class="dim" style="margin:0 0 14px;font-size:.86rem">선택한 스냅샷의 파일을 <code>/restore-out</code>(안전한 임시 영역)으로 복원합니다. 라이브 데이터는 절대 덮어쓰지 않습니다.</p>
+      <div class="field"><div class="lab">스냅샷</div><div class="ctl"><select id="rsnap"></select></div></div>
+      <div class="field"><div class="lab">경로 (선택)<small>비우면 전체 · 쉼표로 여러 개 · 예: /home/docker/gitea</small></div><div class="ctl"><input id="rpaths" type="text" placeholder="/home/docker/…" style="width:min(280px,60vw)"></div></div>
+      <div class="field"><div class="lab">관리자 비밀번호<small>위험 작업 재확인</small></div><div class="ctl"><input id="rpass" type="password" placeholder="••••••••" style="width:180px"></div></div>
+      <div class="row-actions">
+        <button id="restoreBtn" class="btn-primary">복원 실행</button>
+        <button id="rdl" class="btn-ghost" style="display:none">결과 다운로드 (.tar.gz)</button>
+        <span id="rmsg" class="msg"></span>
+      </div>
+    </div>
+
+    <div class="card c5">
       <h2>실행 이력</h2>
       <table id="history"></table>
     </div>
