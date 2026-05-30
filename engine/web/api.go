@@ -98,6 +98,7 @@ func (s *Server) Routes() http.Handler {
 }
 
 // serveUI writes an embedded UI file with the given content type.
+// no-store prevents stale cached assets after an upgrade.
 func (s *Server) serveUI(w http.ResponseWriter, name, ctype string) {
 	b, err := fs.ReadFile(uiFS(), name)
 	if err != nil {
@@ -105,12 +106,15 @@ func (s *Server) serveUI(w http.ResponseWriter, name, ctype string) {
 		return
 	}
 	w.Header().Set("Content-Type", ctype)
+	w.Header().Set("Cache-Control", "no-store")
 	w.Write(b)
 }
 
 func (s *Server) staticFile(name, ctype string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) { s.serveUI(w, name, ctype) }
 }
+
+// (serveUI already sets Cache-Control: no-store for all embedded assets.)
 
 // handleRoot gates "/": the dashboard is served only to authenticated users,
 // otherwise the browser is redirected to the standalone login page.
@@ -173,11 +177,14 @@ func (s *Server) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if n := nextRun(); n != "" {
 		st["next_run"] = n
 	}
+	st["host"] = os.Getenv("HOST_TAG")
+	st["scheduler_enabled"] = schedulerEnabled()
 	s.writeJSON(w, 200, st)
 }
 
 func (s *Server) handleSnapshots(w http.ResponseWriter, r *http.Request) {
-	snaps, err := ListSnapshots(r.Context())
+	fresh := r.URL.Query().Get("fresh") == "1"
+	snaps, err := ListSnapshotsCached(r.Context(), 15*time.Second, fresh)
 	if err != nil {
 		s.writeJSON(w, 502, map[string]string{"error": Redact(err.Error())})
 		return

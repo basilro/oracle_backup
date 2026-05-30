@@ -4,17 +4,53 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>backup-stack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 </head>
 <body>
 <div id="app">
-  <header><h1>백업 대시보드</h1><span id="host"></span><button id="logout">로그아웃</button></header>
-  <main id="dash">
-    <div class="card" id="status"></div>
-    <div class="card"><h2>설정</h2><div id="config"></div><button id="saveCfg">설정 저장</button> <span id="cfgMsg"></span></div>
-    <div class="card"><h2>스냅샷</h2><table id="snaps"></table></div>
-    <div class="card"><h2>실행 이력</h2><table id="history"></table></div>
-    <div class="card"><button id="backupNow">지금 백업</button> <span id="actMsg"></span></div>
+  <header class="topbar">
+    <div class="brand"><span class="mark"></span><b>backup<span>·</span>stack</b></div>
+    <span class="chip" id="host">—</span>
+    <span class="spacer"></span>
+    <button id="logout" class="btn-ghost">로그아웃</button>
+  </header>
+
+  <main>
+    <section class="strip" id="strip"></section>
+
+    <div class="grid-2">
+      <div class="card c2">
+        <h2>설정</h2>
+        <div id="config"></div>
+        <div class="row-actions">
+          <button id="saveCfg" class="btn-primary">설정 저장</button>
+          <span id="cfgMsg" class="msg"></span>
+        </div>
+      </div>
+
+      <div style="display:grid;gap:18px">
+        <div class="card c3">
+          <h2>지금 백업</h2>
+          <p class="dim" style="margin:0 0 14px;font-size:.86rem">수동으로 즉시 백업을 실행합니다. 스케줄과 무관합니다.</p>
+          <div class="row-actions" style="margin:0">
+            <button id="backupNow" class="btn-primary">백업 실행</button>
+            <span id="actMsg" class="msg"></span>
+          </div>
+        </div>
+        <div class="card c4">
+          <h2>스냅샷</h2>
+          <table id="snaps"></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card c5">
+      <h2>실행 이력</h2>
+      <table id="history"></table>
+    </div>
   </main>
 </div>
 <script src="/app.js"></script>

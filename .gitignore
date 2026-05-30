@@ -8,3 +8,4 @@ engine/web/backup-engine
 *.db
 *.db-wal
 *.db-shm
+.gstack/

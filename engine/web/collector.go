@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os/exec"
+	"sync"
 	"time"
 )
 
@@ -68,4 +69,36 @@ func ListSnapshots(ctx context.Context) ([]Snapshot, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// snapshot list is cached briefly because each call walks restic -> rclone -> Drive
+// (1-3s). Serves stale-on-error so a transient Drive blip doesn't blank the UI.
+var snapCache struct {
+	mu   sync.Mutex
+	data []Snapshot
+	at   time.Time
+}
+
+func ListSnapshotsCached(ctx context.Context, ttl time.Duration, fresh bool) ([]Snapshot, error) {
+	snapCache.mu.Lock()
+	if !fresh && snapCache.data != nil && time.Since(snapCache.at) < ttl {
+		d := snapCache.data
+		snapCache.mu.Unlock()
+		return d, nil
+	}
+	snapCache.mu.Unlock()
+	d, err := ListSnapshots(ctx)
+	if err != nil {
+		snapCache.mu.Lock()
+		defer snapCache.mu.Unlock()
+		if snapCache.data != nil {
+			return snapCache.data, nil // stale-on-error
+		}
+		return nil, err
+	}
+	snapCache.mu.Lock()
+	snapCache.data = d
+	snapCache.at = time.Now()
+	snapCache.mu.Unlock()
+	return d, nil
 }

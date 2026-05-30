@@ -44,6 +44,12 @@ func nextRun() string {
 	return schedNext.In(time.Local).Format("2006-01-02 15:04:05 MST")
 }
 
+func schedulerEnabled() bool {
+	schedMu.Lock()
+	defer schedMu.Unlock()
+	return !schedNext.IsZero()
+}
+
 func loadSessionKey() []byte {
 	if v := os.Getenv("WEB_SESSION_KEY"); len(v) >= 32 {
 		return []byte(v)
