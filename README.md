@@ -75,6 +75,54 @@ docker compose up -d --build
 
 ---
 
+## 2.5 목적지(rclone remote) 연결 설정 — Google Drive / WebDAV / Synology / FTP
+
+백업 **목적지**는 `rclone/rclone.conf` 의 한 `[섹션]`(=remote)으로 정의하고, `.env` 의 `REMOTE_NAME` 으로 어느 remote를 쓸지 고른다. 자격증명(Drive 토큰·WebDAV 비번 등)은 이 파일에만 두며 웹 UI에서는 다루지 않는다.
+
+### 방법 A — rclone 설정 마법사 (권장, 모든 백엔드)
+별도 설치 없이 공식 rclone 이미지로 대화식 설정. `./rclone/rclone.conf` 에 바로 기록된다.
+```bash
+docker run --rm -it -v "$PWD/rclone:/config/rclone" rclone/rclone:1.66 config
+#  n) New remote → 이름 입력(이게 REMOTE_NAME) → 백엔드 선택 → 안내대로 진행
+#  Google Drive 등 OAuth 백엔드: 브라우저가 없으면 rclone이 다른 PC에서 실행할
+#  `rclone authorize "drive"` 명령을 출력 → 그 PC에서 실행 후 토큰을 붙여넣기
+```
+
+### 방법 B — 비대화식 한 줄 생성 (WebDAV/Synology/FTP/SFTP 등 비-OAuth)
+비밀번호는 rclone이 자동 obscure 한다.
+```bash
+R="docker run --rm -v $PWD/rclone:/config/rclone rclone/rclone:1.66 config create"
+
+# WebDAV (Nextcloud 등)
+$R mydav webdav url=https://dav.example.com/remote.php/dav vendor=nextcloud user=USER pass=PASS
+
+# Synology — DSM의 WebDAV Server 패키지 설치/활성(보통 https 5006) 후 WebDAV로 연결
+$R mynas webdav url=https://nas.example.com:5006 vendor=other user=USER pass=PASS
+#  또는 Synology SFTP(제어판 SFTP 활성, 보통 22):
+$R mynas sftp host=nas.example.com user=USER pass=PASS port=22
+
+# FTP / SFTP (일반)
+$R myftp  ftp  host=ftp.example.com user=USER pass=PASS
+$R mysftp sftp host=ssh.example.com user=USER pass=PASS port=22
+```
+
+### 방법 C — 직접 편집
+`rclone/rclone.conf` 에 섹션을 손으로 추가(비밀번호는 `rclone obscure '평문'` 결과를 넣음).
+
+### 설정 후
+```bash
+# 1) 연결 확인 (remote 이름으로 최상위 목록이 보이면 성공)
+docker run --rm -v "$PWD/rclone:/config/rclone" rclone/rclone:1.66 lsd <REMOTE_NAME>:
+# 2) .env 의 REMOTE_NAME 을 그 섹션 이름으로 설정
+# 3) 새 저장소면: ALLOW_REPO_INIT=true → docker compose run --rm engine init → 다시 false
+# 4) docker compose up -d   (엔진은 rclone.conf 를 ro 로 읽어 restic 백엔드로 사용)
+```
+
+> 참고: 실행 중 엔진은 `rclone.conf` 를 **읽기 전용**으로 마운트한다(보안). 설정 변경은 위 `docker run ... config` 처럼 별도 명령으로 `./rclone/rclone.conf` 를 고친 뒤 `docker compose restart engine`.
+> 백엔드 종류와 무관하게 저장소 경로는 `<REMOTE_NAME>:backups/<HOST_TAG>` 이며, restic 암호화는 백엔드와 독립이다(어디에 두든 내용은 암호화됨).
+
+---
+
 ## 3. 웹 대시보드
 
 - 주소: `http://<서버IP>:<WEB_PORT>` (기본 8088). 외부 노출 시 리버스 프록시+TLS 권장.
