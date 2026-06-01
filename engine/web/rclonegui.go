@@ -63,6 +63,16 @@ func dockerInspect(ref string) (*dInspect, error) {
 
 var errNotFound = errors.New("not found")
 
+// rgBind is the HOST publish address for the GUI port. Default 127.0.0.1
+// (reach via SSH tunnel). Set RCLONE_GUI_BIND=0.0.0.0 when host access is
+// already controlled upstream (NAT gateway / domain forwarding).
+func rgBind() string {
+	if b := os.Getenv("RCLONE_GUI_BIND"); b != "" {
+		return b
+	}
+	return "127.0.0.1"
+}
+
 // selfRef identifies the engine's own container (env override, else hostname).
 func selfRef() (string, error) {
 	if v := os.Getenv("SELF_CONTAINER"); v != "" {
@@ -114,12 +124,12 @@ func startRcloneGUI() (string, error) {
 	pass := randPassword(20)
 	_ = forceRemove(rgName) // clear any stale one
 
-	// HOST publish binds to 127.0.0.1 only → unreachable from the LAN (this is the
-	// security control). The in-container listener MUST be 0.0.0.0 or docker's port
-	// proxy (which targets the container's bridge IP, not its loopback) can't deliver.
+	// HOST publish binds per rgBind() (default 127.0.0.1). The in-container listener
+	// MUST be 0.0.0.0 or docker's port proxy (which targets the container's bridge
+	// IP, not its loopback) can't deliver. Auth + TTL guard the rc API regardless.
 	args := []string{
 		"run", "-d", "--name", rgName, "--restart", "no",
-		"-p", "127.0.0.1:" + rgPort + ":5572", // host loopback only
+		"-p", rgBind() + ":" + rgPort + ":5572",
 		"--mount", "type=bind,source=" + hostDir + ",destination=/etc/rclone",
 		"--entrypoint", "rclone", img,
 		"rcd", "--rc-web-gui", "--rc-web-gui-no-open-browser",
@@ -144,7 +154,7 @@ func startRcloneGUI() (string, error) {
 		}
 	})
 	rgMu.Unlock()
-	log.Printf("rclone-gui started on host 127.0.0.1:%s (auto-stop in %s)", rgPort, rgTTL)
+	log.Printf("rclone-gui started on host %s:%s (auto-stop in %s)", rgBind(), rgPort, rgTTL)
 	return pass, nil
 }
 

@@ -458,7 +458,7 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 // GET → {running}; POST {action:"start"|"stop"} (CSRF) → start returns {port,user,pass}.
 func (s *Server) handleRcloneGUI(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		s.writeJSON(w, 200, map[string]any{"running": rcloneGUIRunning(), "port": rgPort})
+		s.writeJSON(w, 200, map[string]any{"running": rcloneGUIRunning(), "port": rgPort, "bind": rgBind()})
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -481,7 +481,7 @@ func (s *Server) handleRcloneGUI(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.store.Audit(user, "rclone-gui-start", "ok")
-		s.writeJSON(w, 200, map[string]any{"running": true, "port": rgPort, "user": "admin", "pass": pass})
+		s.writeJSON(w, 200, map[string]any{"running": true, "port": rgPort, "bind": rgBind(), "user": "admin", "pass": pass})
 	case "stop":
 		if err := stopRcloneGUI(); err != nil {
 			s.store.Audit(user, "rclone-gui-stop", "fail")

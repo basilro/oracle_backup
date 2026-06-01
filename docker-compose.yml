@@ -18,6 +18,7 @@ services:
       ALLOW_REPO_INIT: ${ALLOW_REPO_INIT:-false}
       RCLONE_CONFIG: /etc/rclone/rclone.conf
       SELF_CONTAINER: backupstack_engine
+      RCLONE_GUI_BIND: ${RCLONE_GUI_BIND:-127.0.0.1}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /home:/home:ro

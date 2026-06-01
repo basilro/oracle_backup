@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-01b";
+const BUILD = "ui-2026-06-01c";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -187,10 +187,19 @@ function rgRender(state) {
   $("#rgStart").style.display = running ? "none" : "";
   $("#rgStop").style.display = running ? "" : "none";
   const port = state.port || "5572";
+  const loopback = !state.bind || state.bind === "127.0.0.1" || state.bind === "localhost";
   if (running) {
-    $("#rgInfo").innerHTML = rgTunnelHelp(port, state.user ? { user: state.user, pass: state.pass || "(시작 시 표시된 비밀번호)" } : null);
+    if (loopback) {
+      $("#rgInfo").innerHTML = rgTunnelHelp(port, state.user ? { user: state.user, pass: state.pass || "(시작 시 표시된 비밀번호)" } : null);
+    } else {
+      const url = `http://${location.hostname}:${port}`;
+      const creds = state.user ? `<br>로그인: <code>${esc(state.user)}</code> / <code>${esc(state.pass || "(시작 시 표시된 비밀번호)")}</code>` : "";
+      $("#rgInfo").innerHTML = `설정 화면 실행 중 → <a href="${url}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(url)} 열기</a>${creds}` +
+        `<br><span class="dim">이 포트(${esc(port)})가 도메인/포워딩으로 열려 있어야 접속됩니다.</span>` +
+        `<br><span style="color:var(--fail)">끝나면 <b>설정 화면 중지</b> 클릭(미사용 시 30분 후 자동 종료).</span>`;
+    }
   } else {
-    $("#rgInfo").innerHTML = `'rclone 설정 열기'를 누르면 rclone 공식 설정 화면이 서버 로컬에 잠깐 뜹니다(SSH 터널로 접속).`;
+    $("#rgInfo").innerHTML = `'rclone 설정 열기'를 누르면 rclone 공식 설정 화면이 잠깐 뜹니다.`;
   }
 }
 async function rgStatus() {
@@ -201,7 +210,11 @@ async function rgStart() {
   btn.disabled = true; m.textContent = "기동 중… (최초 실행은 GUI 자산 다운로드로 수십 초 걸릴 수 있음)"; m.className = "msg";
   try {
     const r = await api("/api/rclone-gui", { method: "POST", body: JSON.stringify({ Action: "start" }) });
-    if (r.ok) { const d = await r.json(); rgRender(d); m.textContent = "✓ 실행됨 — 아래 안내대로 SSH 터널로 접속"; m.className = "msg ok"; }
+    if (r.ok) {
+      const d = await r.json(); rgRender(d); m.textContent = "✓ 실행됨"; m.className = "msg ok";
+      const loopback = !d.bind || d.bind === "127.0.0.1" || d.bind === "localhost";
+      if (!loopback) window.open(`http://${location.hostname}:${d.port}`, "_blank", "noopener");
+    }
     else { m.textContent = "✕ " + (await r.json()).error; m.className = "msg fail"; }
   } catch (e) { if (String(e.message) !== "unauthorized") { m.textContent = "✕ " + e.message; m.className = "msg fail"; } }
   btn.disabled = false;
