@@ -33,6 +33,13 @@ type Server struct {
 
 func (s *Server) sessionVer() string { return sessionVersion(s.adminHash) }
 
+// isHTTPS reports whether the request arrived over TLS, directly or via a
+// trusted reverse proxy setting X-Forwarded-Proto=https. Lets cookies be
+// marked Secure when fronted by TLS without mandating it on a LAN homelab.
+func isHTTPS(r *http.Request) bool {
+	return r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+}
+
 func (s *Server) writeJSON(w http.ResponseWriter, code int, v any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
@@ -159,9 +166,10 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tok := signSession(body.User, time.Now().Unix(), s.sessionVer(), s.sessionKey)
-	http.SetCookie(w, &http.Cookie{Name: "session", Value: tok, Path: "/", HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode})
+	secure := isHTTPS(r)
+	http.SetCookie(w, &http.Cookie{Name: "session", Value: tok, Path: "/", HttpOnly: true, Secure: secure, SameSite: http.SameSiteStrictMode})
 	csrf := randToken()
-	http.SetCookie(w, &http.Cookie{Name: "csrf", Value: csrf, Path: "/", Secure: r.TLS != nil, SameSite: http.SameSiteStrictMode})
+	http.SetCookie(w, &http.Cookie{Name: "csrf", Value: csrf, Path: "/", Secure: secure, SameSite: http.SameSiteStrictMode})
 	s.store.Audit(body.User, "login", "ok")
 	s.writeJSON(w, 200, map[string]string{"csrf": csrf})
 }
@@ -476,6 +484,7 @@ func (s *Server) handleRcloneGUI(w http.ResponseWriter, r *http.Request) {
 		s.writeJSON(w, 200, map[string]any{"running": true, "port": rgPort, "user": "admin", "pass": pass})
 	case "stop":
 		if err := stopRcloneGUI(); err != nil {
+			s.store.Audit(user, "rclone-gui-stop", "fail")
 			s.writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
 		}

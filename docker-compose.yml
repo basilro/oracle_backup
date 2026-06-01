@@ -3,6 +3,7 @@ services:
     build: ./engine
     image: backupstack-engine:local
     container_name: backupstack_engine
+    hostname: backupstack_engine
     init: true
     stop_grace_period: 90s
     security_opt:
@@ -16,6 +17,7 @@ services:
       HOST_TAG: ${HOST_TAG:?set HOST_TAG in .env}
       ALLOW_REPO_INIT: ${ALLOW_REPO_INIT:-false}
       RCLONE_CONFIG: /etc/rclone/rclone.conf
+      SELF_CONTAINER: backupstack_engine
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /home:/home:ro

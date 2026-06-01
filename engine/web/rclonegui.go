@@ -4,17 +4,33 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
+	"strings"
+	"sync"
+	"time"
 )
 
 // On-demand rclone Web GUI: the engine spawns a sibling container (same image)
-// running `rclone rcd --rc-web-gui` with ./rclone bind-mounted READ-WRITE, so
-// the operator configures remotes in rclone's own UI and the result lands in
-// rclone/rclone.conf. The running engine keeps rclone.conf read-only.
+// running `rclone rcd --rc-web-gui` with ./rclone bind-mounted READ-WRITE.
+//
+// SECURITY: the rclone RC API is powerful (config/dump returns all cloud tokens
+// in plaintext, operations/* read/write/delete cloud data, core/command runs
+// arbitrary rclone). It is therefore bound to LOOPBACK only (127.0.0.1) and must
+// be reached via an SSH tunnel — never exposed on the LAN. A hard TTL auto-stops
+// it, and the engine reconciles any orphan on boot.
 const (
 	rgName = "backupstack_rclonegui"
 	rgPort = "5572"
+	rgTTL  = 30 * time.Minute
+)
+
+var (
+	rgMu    sync.Mutex
+	rgTimer *time.Timer
+	// rgAudit, if set by main(), records GUI lifecycle events.
+	rgAudit func(action, result string)
 )
 
 type dInspect struct {
@@ -31,9 +47,12 @@ type dInspect struct {
 }
 
 func dockerInspect(ref string) (*dInspect, error) {
-	out, err := exec.Command("docker", "inspect", ref).Output()
+	out, err := exec.Command("docker", "inspect", ref).CombinedOutput()
 	if err != nil {
-		return nil, err
+		if strings.Contains(string(out), "No such") {
+			return nil, errNotFound
+		}
+		return nil, fmt.Errorf("docker inspect: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	var a []dInspect
 	if json.Unmarshal(out, &a) != nil || len(a) == 0 {
@@ -42,17 +61,40 @@ func dockerInspect(ref string) (*dInspect, error) {
 	return &a[0], nil
 }
 
-func selfRef() string { h, _ := os.Hostname(); return h }
+var errNotFound = errors.New("not found")
 
-// rcloneGUIRunning reports whether the GUI container exists and is running.
-func rcloneGUIRunning() bool {
-	d, err := dockerInspect(rgName)
-	return err == nil && d.State.Running
+// selfRef identifies the engine's own container (env override, else hostname).
+func selfRef() (string, error) {
+	if v := os.Getenv("SELF_CONTAINER"); v != "" {
+		return v, nil
+	}
+	h, err := os.Hostname()
+	if err != nil || h == "" {
+		return "", errors.New("self container ref 확인 불가 (SELF_CONTAINER 미설정 + hostname 없음)")
+	}
+	return h, nil
 }
 
-// startRcloneGUI (re)launches the GUI container and returns the generated password.
+// rcloneGUIRunning reports whether the GUI container exists and is running.
+// Docker errors other than not-found are logged (not silently treated as down).
+func rcloneGUIRunning() bool {
+	d, err := dockerInspect(rgName)
+	if err != nil {
+		if !errors.Is(err, errNotFound) {
+			log.Printf("rclone-gui status: %v", err)
+		}
+		return false
+	}
+	return d.State.Running
+}
+
+// startRcloneGUI (re)launches the loopback-bound GUI container; returns the password.
 func startRcloneGUI() (string, error) {
-	self, err := dockerInspect(selfRef())
+	ref, err := selfRef()
+	if err != nil {
+		return "", err
+	}
+	self, err := dockerInspect(ref)
 	if err != nil {
 		return "", fmt.Errorf("engine 컨테이너 inspect 실패: %v", err)
 	}
@@ -70,12 +112,15 @@ func startRcloneGUI() (string, error) {
 		return "", errors.New("engine 이미지 이름을 확인할 수 없음")
 	}
 	pass := randPassword(20)
-	_ = exec.Command("docker", "rm", "-f", rgName).Run() // remove any stale one
+	_ = forceRemove(rgName) // clear any stale one
 
+	// HOST publish binds to 127.0.0.1 only → unreachable from the LAN (this is the
+	// security control). The in-container listener MUST be 0.0.0.0 or docker's port
+	// proxy (which targets the container's bridge IP, not its loopback) can't deliver.
 	args := []string{
 		"run", "-d", "--name", rgName, "--restart", "no",
-		"-p", rgPort + ":5572",
-		"-v", hostDir + ":/etc/rclone",
+		"-p", "127.0.0.1:" + rgPort + ":5572", // host loopback only
+		"--mount", "type=bind,source=" + hostDir + ",destination=/etc/rclone",
 		"--entrypoint", "rclone", img,
 		"rcd", "--rc-web-gui", "--rc-web-gui-no-open-browser",
 		"--rc-addr", "0.0.0.0:5572",
@@ -83,15 +128,44 @@ func startRcloneGUI() (string, error) {
 		"--config", "/etc/rclone/rclone.conf",
 	}
 	if out, err := exec.Command("docker", args...).CombinedOutput(); err != nil {
-		return "", fmt.Errorf("기동 실패: %v: %s", err, string(out))
+		_ = forceRemove(rgName) // no orphan with an unknown password
+		return "", fmt.Errorf("기동 실패: %v: %s", err, strings.TrimSpace(string(out)))
 	}
+
+	rgMu.Lock()
+	if rgTimer != nil {
+		rgTimer.Stop()
+	}
+	rgTimer = time.AfterFunc(rgTTL, func() {
+		log.Printf("rclone-gui: TTL reached, auto-stopping")
+		_ = stopRcloneGUI()
+		if rgAudit != nil {
+			rgAudit("rclone-gui-stop", "auto")
+		}
+	})
+	rgMu.Unlock()
+	log.Printf("rclone-gui started on host 127.0.0.1:%s (auto-stop in %s)", rgPort, rgTTL)
 	return pass, nil
 }
 
 func stopRcloneGUI() error {
-	out, err := exec.Command("docker", "rm", "-f", rgName).CombinedOutput()
+	rgMu.Lock()
+	if rgTimer != nil {
+		rgTimer.Stop()
+		rgTimer = nil
+	}
+	rgMu.Unlock()
+	return forceRemove(rgName)
+}
+
+// forceRemove deletes the named container, treating "no such container" as success.
+func forceRemove(name string) error {
+	out, err := exec.Command("docker", "rm", "-f", name).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("%v: %s", err, string(out))
+		if strings.Contains(string(out), "No such container") {
+			return nil
+		}
+		return fmt.Errorf("docker rm: %v: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }

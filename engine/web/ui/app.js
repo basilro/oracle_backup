@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-01a";
+const BUILD = "ui-2026-06-01b";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -173,18 +173,24 @@ function pollUntilIdle() {
   }, 4000);
 }
 
-/* ---------- rclone GUI ---------- */
-function rgURL(port) { return `http://${location.hostname}:${port}`; }
+/* ---------- rclone GUI (loopback only — reach via SSH tunnel) ---------- */
+function rgTunnelHelp(port, creds) {
+  const host = location.hostname;
+  return `보안상 설정 화면은 <b>서버 로컬(127.0.0.1:${esc(port)})에만</b> 열립니다(rclone API가 클라우드 토큰을 다루므로 LAN 노출 금지). 접속 방법:` +
+    `<br>1) 내 PC에서 SSH 터널: <code>ssh -L ${esc(port)}:localhost:${esc(port)} &lt;사용자&gt;@${esc(host)}</code>` +
+    `<br>2) 브라우저에서 <a href="http://127.0.0.1:${esc(port)}" target="_blank" rel="noopener" style="color:var(--accent)">http://127.0.0.1:${esc(port)}</a> 열기` +
+    (creds ? `<br>3) 로그인: <code>${esc(creds.user)}</code> / <code>${esc(creds.pass)}</code>` : "") +
+    `<br><span style="color:var(--fail)">끝나면 <b>설정 화면 중지</b> 클릭(미사용 시 30분 후 자동 종료).</span>`;
+}
 function rgRender(state) {
   const running = state.running;
   $("#rgStart").style.display = running ? "none" : "";
   $("#rgStop").style.display = running ? "" : "none";
-  const url = rgURL(state.port || "5572");
+  const port = state.port || "5572";
   if (running) {
-    const creds = state.user ? `<br>로그인: <code>${esc(state.user)}</code> / <code>${esc(state.pass || "(이전 비밀번호)")}</code>` : "";
-    $("#rgInfo").innerHTML = `설정 화면이 실행 중입니다 → <a href="${url}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(url)} 열기</a>${creds}<br><span style="color:var(--fail)">설정이 끝나면 반드시 <b>설정 화면 중지</b>를 눌러 포트를 닫으세요.</span>`;
+    $("#rgInfo").innerHTML = rgTunnelHelp(port, state.user ? { user: state.user, pass: state.pass || "(시작 시 표시된 비밀번호)" } : null);
   } else {
-    $("#rgInfo").innerHTML = `'rclone 설정 열기'를 누르면 같은 서버의 <code>:${esc(state.port || "5572")}</code> 포트에 rclone 공식 설정 화면이 잠깐 뜹니다.`;
+    $("#rgInfo").innerHTML = `'rclone 설정 열기'를 누르면 rclone 공식 설정 화면이 서버 로컬에 잠깐 뜹니다(SSH 터널로 접속).`;
   }
 }
 async function rgStatus() {
@@ -195,7 +201,7 @@ async function rgStart() {
   btn.disabled = true; m.textContent = "기동 중… (최초 실행은 GUI 자산 다운로드로 수십 초 걸릴 수 있음)"; m.className = "msg";
   try {
     const r = await api("/api/rclone-gui", { method: "POST", body: JSON.stringify({ Action: "start" }) });
-    if (r.ok) { const d = await r.json(); rgRender(d); m.textContent = "✓ 실행됨"; m.className = "msg ok"; window.open(rgURL(d.port), "_blank", "noopener"); }
+    if (r.ok) { const d = await r.json(); rgRender(d); m.textContent = "✓ 실행됨 — 아래 안내대로 SSH 터널로 접속"; m.className = "msg ok"; }
     else { m.textContent = "✕ " + (await r.json()).error; m.className = "msg fail"; }
   } catch (e) { if (String(e.message) !== "unauthorized") { m.textContent = "✕ " + e.message; m.className = "msg fail"; } }
   btn.disabled = false;

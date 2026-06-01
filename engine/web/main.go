@@ -139,6 +139,12 @@ func main() {
 	defer store.Close()
 	store.ReconcileStuck()
 
+	// rclone GUI: reconcile any orphan from a prior engine run, and wire audit.
+	rgAudit = func(action, result string) { store.Audit("system", action, result) }
+	if err := stopRcloneGUI(); err != nil {
+		log.Printf("rclone-gui boot reconcile: %v", err)
+	}
+
 	runner := NewRunner(store, "/opt/backup/scripts", "/var/log/backup")
 
 	adminUser := os.Getenv("WEB_ADMIN_USER")
