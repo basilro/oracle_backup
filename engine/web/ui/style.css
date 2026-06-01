@@ -91,16 +91,21 @@ main {
 .grid-2 { display: grid; gap: 18px; grid-template-columns: 1fr; }
 @media (min-width: 880px) { .grid-2 { grid-template-columns: 1.05fr .95fr; align-items: start; } }
 
-/* ---------- tabs ---------- */
-.tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+/* ---------- tabs (segmented control) ---------- */
+.tabs {
+  display: inline-flex; gap: 4px; padding: 5px; align-self: start; flex-wrap: wrap;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 13px;
+}
 button.tab {
   background: transparent; color: var(--muted); border: 0; box-shadow: none;
-  padding: 11px 18px; border-radius: 9px 9px 0 0; font-weight: 600; font-size: .92rem;
-  border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer;
-  transition: color .15s, background .15s, border-color .15s;
+  padding: 9px 20px; border-radius: 9px; font-weight: 600; font-size: .9rem;
+  cursor: pointer; transition: color .15s, background .15s, box-shadow .15s; transform: none;
 }
-button.tab:hover { color: var(--text); background: rgba(255,255,255,.02); transform: none; }
-button.tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-dim); }
+button.tab:hover { color: var(--text); background: rgba(255,255,255,.04); transform: none; }
+button.tab.active {
+  color: #1a1205; background: var(--accent);
+  box-shadow: 0 6px 16px -8px rgba(245,177,76,.75);
+}
 .tabpanel { display: grid; gap: 18px; }
 .tabpanel[hidden] { display: none; }
 

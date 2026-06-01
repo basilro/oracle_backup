@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-01d";
+const BUILD = "ui-2026-06-01e";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -15,18 +15,21 @@ const FIELDS = [
 
 function getCsrf() { const m = document.cookie.match(/csrf=([^;]+)/); if (m) csrf = m[1]; }
 
-/* ---------- tabs ---------- */
-function initTabs() {
-  const btns = [...document.querySelectorAll("#tabs .tab")];
+/* ---------- tabs (event delegation, robust) ---------- */
+function showTab(name) {
   const panels = [...document.querySelectorAll(".tabpanel")];
-  const show = name => {
-    if (!panels.some(p => p.dataset.panel === name)) name = "overview";
-    btns.forEach(b => b.classList.toggle("active", b.dataset.tab === name));
-    panels.forEach(p => { p.hidden = p.dataset.panel !== name; });
-    history.replaceState(null, "", "#" + name);
-  };
-  btns.forEach(b => b.onclick = () => show(b.dataset.tab));
-  show((location.hash || "#overview").slice(1));
+  if (!panels.some(p => p.dataset.panel === name)) name = "overview";
+  document.querySelectorAll("#tabs .tab").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  panels.forEach(p => { p.hidden = p.dataset.panel !== name; });
+  try { history.replaceState(null, "", "#" + name); } catch (e) {}
+}
+function initTabs() {
+  const bar = $("#tabs");
+  if (bar) bar.addEventListener("click", e => {
+    const b = e.target.closest(".tab");
+    if (b && b.dataset.tab) showTab(b.dataset.tab);
+  });
+  showTab((location.hash || "#overview").slice(1));
 }
 
 /* ---------- configured remotes list ---------- */
