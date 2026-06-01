@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"os/exec"
@@ -107,6 +108,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/restore-download", s.requireAuth(s.handleRestoreDownload))
 	mux.HandleFunc("/api/rclone-gui", s.requireAuth(s.handleRcloneGUI))
 	mux.HandleFunc("/api/rclone-remotes", s.requireAuth(s.handleRcloneRemotes))
+	mux.HandleFunc("/rclone-gui/", s.requireAuth(s.handleRcloneGUIProxy))
 	mux.HandleFunc("/", s.handleRoot)
 	return mux
 }
@@ -455,6 +457,33 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, map[string]string{"status": "restored", "target": safe})
 }
 
+// handleRcloneGUIProxy reverse-proxies /rclone-gui/* to the GUI container on the
+// docker network, injecting its basic-auth so the browser (already authenticated
+// to the dashboard) never sees the rclone password. Same-origin → embeddable in a
+// modal iframe. Returns 503 when the GUI is not running.
+func (s *Server) handleRcloneGUIProxy(w http.ResponseWriter, r *http.Request) {
+	if !rcloneGUIActive() {
+		http.Error(w, "rclone 설정 화면이 실행 중이 아닙니다", http.StatusServiceUnavailable)
+		return
+	}
+	target, _ := url.Parse("http://" + rgName + ":5572")
+	px := httputil.NewSingleHostReverseProxy(target)
+	base := px.Director
+	px.Director = func(req *http.Request) {
+		base(req)
+		req.Host = target.Host
+	}
+	px.ModifyResponse = func(resp *http.Response) error {
+		resp.Header.Del("X-Frame-Options")
+		resp.Header.Del("Content-Security-Policy")
+		return nil
+	}
+	px.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		http.Error(w, "rclone 설정 화면 준비 중입니다… 잠시 후 새로고침", http.StatusBadGateway)
+	}
+	px.ServeHTTP(w, r)
+}
+
 // handleRcloneRemotes lists configured rclone remotes (name + type, no secrets)
 // from rclone.conf, flagging the one currently active (REMOTE_NAME).
 func (s *Server) handleRcloneRemotes(w http.ResponseWriter, r *http.Request) {
@@ -490,7 +519,7 @@ func (s *Server) handleRcloneRemotes(w http.ResponseWriter, r *http.Request) {
 // GET → {running}; POST {action:"start"|"stop"} (CSRF) → start returns {port,user,pass}.
 func (s *Server) handleRcloneGUI(w http.ResponseWriter, r *http.Request) {
 	if r.Method == http.MethodGet {
-		s.writeJSON(w, 200, map[string]any{"running": rcloneGUIRunning(), "port": rgPort, "bind": rgBind()})
+		s.writeJSON(w, 200, map[string]any{"running": rcloneGUIRunning()})
 		return
 	}
 	if r.Method != http.MethodPost {
@@ -506,14 +535,13 @@ func (s *Server) handleRcloneGUI(w http.ResponseWriter, r *http.Request) {
 	user, _ := s.currentUser(r)
 	switch body.Action {
 	case "start":
-		pass, err := startRcloneGUI()
-		if err != nil {
+		if err := startRcloneGUI(); err != nil {
 			s.store.Audit(user, "rclone-gui-start", "fail")
 			s.writeJSON(w, 500, map[string]string{"error": err.Error()})
 			return
 		}
 		s.store.Audit(user, "rclone-gui-start", "ok")
-		s.writeJSON(w, 200, map[string]any{"running": true, "port": rgPort, "bind": rgBind(), "user": "admin", "pass": pass})
+		s.writeJSON(w, 200, map[string]any{"running": true})
 	case "stop":
 		if err := stopRcloneGUI(); err != nil {
 			s.store.Audit(user, "rclone-gui-stop", "fail")

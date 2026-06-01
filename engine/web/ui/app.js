@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-01e";
+const BUILD = "ui-2026-06-01g";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -202,60 +202,58 @@ function pollUntilIdle() {
   }, 4000);
 }
 
-/* ---------- rclone GUI (loopback only — reach via SSH tunnel) ---------- */
-function rgTunnelHelp(port, creds) {
-  const host = location.hostname;
-  return `보안상 설정 화면은 <b>서버 로컬(127.0.0.1:${esc(port)})에만</b> 열립니다(rclone API가 클라우드 토큰을 다루므로 LAN 노출 금지). 접속 방법:` +
-    `<br>1) 내 PC에서 SSH 터널: <code>ssh -L ${esc(port)}:localhost:${esc(port)} &lt;사용자&gt;@${esc(host)}</code>` +
-    `<br>2) 브라우저에서 <a href="http://127.0.0.1:${esc(port)}" target="_blank" rel="noopener" style="color:var(--accent)">http://127.0.0.1:${esc(port)}</a> 열기` +
-    (creds ? `<br>3) 로그인: <code>${esc(creds.user)}</code> / <code>${esc(creds.pass)}</code>` : "") +
-    `<br><span style="color:var(--fail)">끝나면 <b>설정 화면 중지</b> 클릭(미사용 시 30분 후 자동 종료).</span>`;
+/* ---------- rclone GUI (in-dashboard modal via reverse proxy) ---------- */
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function rgShowModal(show) {
+  $("#rgModal").hidden = !show;
+  if (!show) { $("#rgFrame").src = "about:blank"; $("#rgFrame").hidden = true; $("#rgLoading").style.display = ""; }
 }
-function rgRender(state) {
-  const running = state.running;
-  $("#rgStart").style.display = running ? "none" : "";
-  $("#rgStop").style.display = running ? "" : "none";
-  const port = state.port || "5572";
-  const loopback = !state.bind || state.bind === "127.0.0.1" || state.bind === "localhost";
-  if (running) {
-    if (loopback) {
-      $("#rgInfo").innerHTML = rgTunnelHelp(port, state.user ? { user: state.user, pass: state.pass || "(시작 시 표시된 비밀번호)" } : null);
-    } else {
-      const url = `http://${location.hostname}:${port}`;
-      const creds = state.user ? `<br>로그인: <code>${esc(state.user)}</code> / <code>${esc(state.pass || "(시작 시 표시된 비밀번호)")}</code>` : "";
-      $("#rgInfo").innerHTML = `설정 화면 실행 중 → <a href="${url}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(url)} 열기</a>${creds}` +
-        `<br><span class="dim">이 포트(${esc(port)})가 도메인/포워딩으로 열려 있어야 접속됩니다.</span>` +
-        `<br><span style="color:var(--fail)">끝나면 <b>설정 화면 중지</b> 클릭(미사용 시 30분 후 자동 종료).</span>`;
-    }
-  } else {
-    $("#rgInfo").innerHTML = `'rclone 설정 열기'를 누르면 rclone 공식 설정 화면이 잠깐 뜹니다.`;
+// poll the proxied GUI until it answers, then load it in the iframe
+async function rgWaitAndLoad() {
+  $("#rgLoading").textContent = "설정 화면 기동 중… (처음 실행은 자산 다운로드로 수십 초 걸릴 수 있습니다)";
+  for (let i = 0; i < 40; i++) {
+    try { const r = await fetch("/rclone-gui/", { method: "GET" }); if (r.ok || r.status === 401) break; } catch (e) {}
+    await sleep(1500);
   }
+  $("#rgFrame").hidden = false;
+  $("#rgFrame").src = "/rclone-gui/?v=" + Date.now();
+  $("#rgFrame").onload = () => { $("#rgLoading").style.display = "none"; autoLoginRclone(); };
 }
-async function rgStatus() {
-  try { rgRender(await (await api("/api/rclone-gui")).json()); } catch (e) {}
+// The rclone Web GUI always shows a "connect" form (URL pre-filled). With --rc-no-auth,
+// clicking Login (blank creds) connects. Auto-click it (same-origin iframe).
+function autoLoginRclone() {
+  $("#rgModalNote").textContent = "자동 연결되지 않으면 화면의 Login을 한 번 누르세요.";
+  let tries = 0;
+  const t = setInterval(() => {
+    tries++;
+    try {
+      const fr = $("#rgFrame"), doc = fr.contentDocument, win = fr.contentWindow;
+      const onLogin = !win || (win.location.hash || "").includes("/login");
+      if (!onLogin) { clearInterval(t); $("#rgModalNote").textContent = ""; return; }
+      const btn = [...(doc ? doc.querySelectorAll("button") : [])].find(b => /login|connect/i.test(b.textContent || ""));
+      if (btn) btn.click();
+    } catch (e) { clearInterval(t); } // cross-origin or gone
+    if (tries > 12) clearInterval(t);
+  }, 700);
 }
 async function rgStart() {
   const m = $("#rgMsg"); const btn = $("#rgStart");
-  btn.disabled = true; m.textContent = "기동 중… (최초 실행은 GUI 자산 다운로드로 수십 초 걸릴 수 있음)"; m.className = "msg";
+  btn.disabled = true; m.textContent = "기동 중…"; m.className = "msg";
   try {
     const r = await api("/api/rclone-gui", { method: "POST", body: JSON.stringify({ Action: "start" }) });
     if (r.ok) {
-      const d = await r.json(); rgRender(d); m.textContent = "✓ 실행됨"; m.className = "msg ok";
-      const loopback = !d.bind || d.bind === "127.0.0.1" || d.bind === "localhost";
-      if (!loopback) window.open(`http://${location.hostname}:${d.port}`, "_blank", "noopener");
-    }
-    else { m.textContent = "✕ " + (await r.json()).error; m.className = "msg fail"; }
+      m.textContent = ""; rgShowModal(true); rgWaitAndLoad();
+    } else { m.textContent = "✕ " + ((await r.json()).error || r.status); m.className = "msg fail"; }
   } catch (e) { if (String(e.message) !== "unauthorized") { m.textContent = "✕ " + e.message; m.className = "msg fail"; } }
   btn.disabled = false;
 }
-async function rgStop() {
-  const m = $("#rgMsg");
-  try {
-    const r = await api("/api/rclone-gui", { method: "POST", body: JSON.stringify({ Action: "stop" }) });
-    if (r.ok) { rgRender({ running: false, port: "5572" }); m.textContent = "✓ 중지됨 (포트 닫힘)"; m.className = "msg ok"; loadRemotes(); }
-    else { m.textContent = "✕ 중지 실패"; m.className = "msg fail"; }
-  } catch (e) {}
+async function rgClose() {
+  rgShowModal(false);
+  try { await api("/api/rclone-gui", { method: "POST", body: JSON.stringify({ Action: "stop" }) }); } catch (e) {}
+  loadRemotes();
 }
+function rgReload() { $("#rgLoading").style.display = ""; $("#rgFrame").src = "/rclone-gui/?v=" + Date.now(); }
+function rgStatus() { /* status not shown in card anymore; modal-driven */ }
 
 /* ---------- excludes ---------- */
 async function loadExcludes() {
@@ -305,7 +303,8 @@ async function logout() { try { await api("/logout", { method: "POST" }); } catc
 $("#saveCfg").onclick = saveCfg;
 $("#saveExcludes").onclick = saveExcludes;
 $("#rgStart").onclick = rgStart;
-$("#rgStop").onclick = rgStop;
+$("#rgClose").onclick = rgClose;
+$("#rgReload").onclick = rgReload;
 $("#rmRefresh").onclick = loadRemotes;
 $("#backupNow").onclick = backup;
 $("#restoreBtn").onclick = restore;

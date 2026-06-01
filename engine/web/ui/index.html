@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=20260601e">
+<link rel="stylesheet" href="/style.css?v=20260601g">
 </head>
 <body>
 <div id="app">
@@ -62,11 +62,9 @@
     <section class="tabpanel" data-panel="dest" hidden>
       <div class="card">
         <h2>목적지 연결 (rclone)</h2>
-        <p class="dim" style="margin:0 0 12px;font-size:.86rem">Google Drive · WebDAV · Synology · FTP/SFTP 등 백업 목적지를 rclone 공식 설정 화면에서 추가/수정합니다. 추가한 remote는 <b>즉시 사용 가능</b>(엔진 재시작 불필요), 활성 목적지 변경은 <code>.env</code>의 <code>REMOTE_NAME</code> 수정 후 재시작.</p>
-        <div id="rgInfo" class="dim" style="font-size:.86rem;margin-bottom:12px"></div>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem">Google Drive · WebDAV · Synology · FTP/SFTP 등 백업 목적지를 rclone 공식 설정 화면(이 창 안 모달)에서 추가/수정합니다. 추가한 remote는 <b>즉시 사용 가능</b>(엔진 재시작 불필요), 활성 목적지 변경은 <code>.env</code>의 <code>REMOTE_NAME</code> 수정 후 재시작. <span class="dim">별도 포트(5572) 노출 없이 대시보드를 통해 안전하게 연결됩니다.</span></p>
         <div class="row-actions" style="margin:0">
           <button id="rgStart" class="btn-primary">rclone 설정 열기</button>
-          <button id="rgStop" class="btn-ghost" style="display:none">설정 화면 중지</button>
           <span id="rgMsg" class="msg"></span>
         </div>
         <div style="margin-top:18px;border-top:1px solid var(--border-soft);padding-top:16px">
@@ -95,7 +93,21 @@
       </div>
     </section>
   </main>
+
+  <div id="rgModal" class="modal" hidden>
+    <div class="modal-box">
+      <div class="modal-head">
+        <b>rclone 설정</b>
+        <span class="dim" id="rgModalNote" style="font-size:.8rem"></span>
+        <span class="spacer"></span>
+        <button id="rgReload" class="btn-ghost">새로고침</button>
+        <button id="rgClose" class="btn-primary">닫기</button>
+      </div>
+      <div id="rgLoading" class="modal-loading">설정 화면 기동 중… (처음 실행은 자산 다운로드로 수십 초 걸릴 수 있습니다)</div>
+      <iframe id="rgFrame" title="rclone config" hidden></iframe>
+    </div>
+  </div>
 </div>
-<script src="/app.js?v=20260601e"></script>
+<script src="/app.js?v=20260601g"></script>
 </body>
 </html>
