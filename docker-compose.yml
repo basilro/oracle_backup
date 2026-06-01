@@ -23,7 +23,7 @@ services:
       - backupstack_staging:/home/docker/_backup_staging
       - ./config:/config
       - ./secrets:/secrets:ro
-      - ./rclone/rclone.conf:/etc/rclone/rclone.conf:ro
+      - ./rclone:/etc/rclone:ro
       - backupstack_state:/state
       - backupstack_logs:/var/log/backup
       - backupstack_restoreout:/restore-out

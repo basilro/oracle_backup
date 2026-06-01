@@ -1,18 +1,30 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
-# 운영설정 seed (없으면 예시 복사)
-[ -f /config/config.env ]   || cp /opt/backup/config.env.example  /config/config.env
+
+export RCLONE_CONFIG="${RCLONE_CONFIG:-/etc/rclone/rclone.conf}"
+cmd="${1:-serve}"
+
+# --- rclone 설정 헬퍼: 운영설정(REMOTE_NAME 등)·시크릿 없이도 동작 ---
+# 새 서버에서 rclone.conf가 아직 없을 때, 이 이미지의 rclone으로 바로 설정한다.
+case "$cmd" in
+  rclone-config)
+    mkdir -p "$(dirname "$RCLONE_CONFIG")"
+    echo "[entrypoint] rclone config → $RCLONE_CONFIG"
+    exec rclone config --config "$RCLONE_CONFIG" ;;
+  rclone)
+    shift
+    exec rclone --config "$RCLONE_CONFIG" "$@" ;;
+esac
+
+# --- 운영 명령: 설정 seed + 저장소 URL 구성 ---
+[ -f /config/config.env ]   || { mkdir -p /config; cp /opt/backup/config.env.example  /config/config.env; }
 [ -f /config/excludes.txt ] || cp /opt/backup/excludes.txt.example /config/excludes.txt
 
-# 단일 컨테이너: restic이 rclone을 stdio로 직접 실행(별도 rclone 서비스 불필요).
-# 자격증명은 rclone.conf(ro 마운트)에만 존재 — repo URL에는 시크릿 없음.
-export RCLONE_CONFIG="${RCLONE_CONFIG:-/etc/rclone/rclone.conf}"
+# 단일 컨테이너: restic이 rclone을 stdio로 직접 실행. 자격증명은 rclone.conf(ro)에만.
 export RESTIC_REPOSITORY="rclone:${REMOTE_NAME:?set REMOTE_NAME}:backups/${HOST_TAG:?set HOST_TAG}"
 export RESTIC_PASSWORD_FILE="/secrets/repo-pass"
-
 echo "[entrypoint] repo=${RESTIC_REPOSITORY}  rclone_config=${RCLONE_CONFIG}  init=${ALLOW_REPO_INIT:-false}"
 
-cmd="${1:-serve}"
 case "$cmd" in
   serve)
     exec /opt/backup/backup-engine ;;
