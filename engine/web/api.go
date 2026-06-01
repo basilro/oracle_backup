@@ -98,6 +98,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/backup", s.requireAuth(s.handleBackup))
 	mux.HandleFunc("/api/restore", s.requireAuth(s.handleRestore))
 	mux.HandleFunc("/api/restore-download", s.requireAuth(s.handleRestoreDownload))
+	mux.HandleFunc("/api/rclone-gui", s.requireAuth(s.handleRcloneGUI))
 	mux.HandleFunc("/", s.handleRoot)
 	return mux
 }
@@ -443,6 +444,46 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.Audit(user, "restore", "ok")
 	s.writeJSON(w, 200, map[string]string{"status": "restored", "target": safe})
+}
+
+// handleRcloneGUI controls the on-demand rclone Web GUI sibling container.
+// GET → {running}; POST {action:"start"|"stop"} (CSRF) → start returns {port,user,pass}.
+func (s *Server) handleRcloneGUI(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		s.writeJSON(w, 200, map[string]any{"running": rcloneGUIRunning(), "port": rgPort})
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method", 405)
+		return
+	}
+	if !s.checkCSRF(r) {
+		http.Error(w, "csrf", 403)
+		return
+	}
+	var body struct{ Action string }
+	json.NewDecoder(r.Body).Decode(&body)
+	user, _ := s.currentUser(r)
+	switch body.Action {
+	case "start":
+		pass, err := startRcloneGUI()
+		if err != nil {
+			s.store.Audit(user, "rclone-gui-start", "fail")
+			s.writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		s.store.Audit(user, "rclone-gui-start", "ok")
+		s.writeJSON(w, 200, map[string]any{"running": true, "port": rgPort, "user": "admin", "pass": pass})
+	case "stop":
+		if err := stopRcloneGUI(); err != nil {
+			s.writeJSON(w, 500, map[string]string{"error": err.Error()})
+			return
+		}
+		s.store.Audit(user, "rclone-gui-stop", "ok")
+		s.writeJSON(w, 200, map[string]any{"running": false})
+	default:
+		http.Error(w, "bad action", 400)
+	}
 }
 
 // handleRestoreDownload streams the current /restore-out contents as a .tar.gz.

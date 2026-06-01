@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-05-30d";
+const BUILD = "ui-2026-06-01a";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -173,6 +173,42 @@ function pollUntilIdle() {
   }, 4000);
 }
 
+/* ---------- rclone GUI ---------- */
+function rgURL(port) { return `http://${location.hostname}:${port}`; }
+function rgRender(state) {
+  const running = state.running;
+  $("#rgStart").style.display = running ? "none" : "";
+  $("#rgStop").style.display = running ? "" : "none";
+  const url = rgURL(state.port || "5572");
+  if (running) {
+    const creds = state.user ? `<br>로그인: <code>${esc(state.user)}</code> / <code>${esc(state.pass || "(이전 비밀번호)")}</code>` : "";
+    $("#rgInfo").innerHTML = `설정 화면이 실행 중입니다 → <a href="${url}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(url)} 열기</a>${creds}<br><span style="color:var(--fail)">설정이 끝나면 반드시 <b>설정 화면 중지</b>를 눌러 포트를 닫으세요.</span>`;
+  } else {
+    $("#rgInfo").innerHTML = `'rclone 설정 열기'를 누르면 같은 서버의 <code>:${esc(state.port || "5572")}</code> 포트에 rclone 공식 설정 화면이 잠깐 뜹니다.`;
+  }
+}
+async function rgStatus() {
+  try { rgRender(await (await api("/api/rclone-gui")).json()); } catch (e) {}
+}
+async function rgStart() {
+  const m = $("#rgMsg"); const btn = $("#rgStart");
+  btn.disabled = true; m.textContent = "기동 중… (최초 실행은 GUI 자산 다운로드로 수십 초 걸릴 수 있음)"; m.className = "msg";
+  try {
+    const r = await api("/api/rclone-gui", { method: "POST", body: JSON.stringify({ Action: "start" }) });
+    if (r.ok) { const d = await r.json(); rgRender(d); m.textContent = "✓ 실행됨"; m.className = "msg ok"; window.open(rgURL(d.port), "_blank", "noopener"); }
+    else { m.textContent = "✕ " + (await r.json()).error; m.className = "msg fail"; }
+  } catch (e) { if (String(e.message) !== "unauthorized") { m.textContent = "✕ " + e.message; m.className = "msg fail"; } }
+  btn.disabled = false;
+}
+async function rgStop() {
+  const m = $("#rgMsg");
+  try {
+    const r = await api("/api/rclone-gui", { method: "POST", body: JSON.stringify({ Action: "stop" }) });
+    if (r.ok) { rgRender({ running: false, port: "5572" }); m.textContent = "✓ 중지됨 (포트 닫힘)"; m.className = "msg ok"; }
+    else { m.textContent = "✕ 중지 실패"; m.className = "msg fail"; }
+  } catch (e) {}
+}
+
 /* ---------- excludes ---------- */
 async function loadExcludes() {
   const t = await (await api("/api/excludes")).text();
@@ -220,6 +256,8 @@ async function logout() { try { await api("/logout", { method: "POST" }); } catc
 
 $("#saveCfg").onclick = saveCfg;
 $("#saveExcludes").onclick = saveExcludes;
+$("#rgStart").onclick = rgStart;
+$("#rgStop").onclick = rgStop;
 $("#backupNow").onclick = backup;
 $("#restoreBtn").onclick = restore;
 $("#rdl").onclick = downloadRestore;
@@ -241,6 +279,7 @@ function failCard(sel, e) {
   loadStatus().catch(e => failCard("#strip", e));
   loadConfig().catch(e => failCard("#config", e));
   loadExcludes().catch(() => {});
+  rgStatus();
   loadHistory().catch(e => failCard("#history", e));
   loadSnaps().then(() => { if (window._busyAtLoad) pollUntilIdle(); }).catch(e => failCard("#snaps", e));
 })();
