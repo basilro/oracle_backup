@@ -106,6 +106,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/restore", s.requireAuth(s.handleRestore))
 	mux.HandleFunc("/api/restore-download", s.requireAuth(s.handleRestoreDownload))
 	mux.HandleFunc("/api/rclone-gui", s.requireAuth(s.handleRcloneGUI))
+	mux.HandleFunc("/api/rclone-remotes", s.requireAuth(s.handleRcloneRemotes))
 	mux.HandleFunc("/", s.handleRoot)
 	return mux
 }
@@ -452,6 +453,37 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.Audit(user, "restore", "ok")
 	s.writeJSON(w, 200, map[string]string{"status": "restored", "target": safe})
+}
+
+// handleRcloneRemotes lists configured rclone remotes (name + type, no secrets)
+// from rclone.conf, flagging the one currently active (REMOTE_NAME).
+func (s *Server) handleRcloneRemotes(w http.ResponseWriter, r *http.Request) {
+	type remote struct {
+		Name   string `json:"name"`
+		Type   string `json:"type"`
+		Active bool   `json:"active"`
+	}
+	out := []remote{}
+	b, err := os.ReadFile(os.Getenv("RCLONE_CONFIG"))
+	if err != nil {
+		s.writeJSON(w, 200, out)
+		return
+	}
+	active := os.Getenv("REMOTE_NAME")
+	idx := -1
+	for _, line := range strings.Split(string(b), "\n") {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
+			name := strings.TrimSpace(t[1 : len(t)-1])
+			out = append(out, remote{Name: name, Active: name == active})
+			idx = len(out) - 1
+		} else if idx >= 0 && strings.HasPrefix(t, "type") {
+			if i := strings.Index(t, "="); i >= 0 {
+				out[idx].Type = strings.TrimSpace(t[i+1:])
+			}
+		}
+	}
+	s.writeJSON(w, 200, out)
 }
 
 // handleRcloneGUI controls the on-demand rclone Web GUI sibling container.

@@ -22,70 +22,78 @@
   <main>
     <section class="strip" id="strip"></section>
 
-    <div class="grid-2">
-      <div class="card c2">
+    <nav class="tabs" id="tabs">
+      <button class="tab" data-tab="overview">개요</button>
+      <button class="tab" data-tab="settings">설정</button>
+      <button class="tab" data-tab="dest">목적지</button>
+      <button class="tab" data-tab="restore">복원</button>
+    </nav>
+
+    <!-- 개요 -->
+    <section class="tabpanel" data-panel="overview">
+      <div class="card">
+        <h2>지금 백업</h2>
+        <p class="dim" style="margin:0 0 14px;font-size:.86rem">수동으로 즉시 백업을 실행합니다. 스케줄과 무관합니다.</p>
+        <div class="row-actions" style="margin:0">
+          <button id="backupNow" class="btn-primary">백업 실행</button>
+          <span id="actMsg" class="msg"></span>
+        </div>
+      </div>
+      <div class="card"><h2>스냅샷</h2><table id="snaps"></table></div>
+      <div class="card"><h2>실행 이력</h2><table id="history"></table></div>
+    </section>
+
+    <!-- 설정 -->
+    <section class="tabpanel" data-panel="settings" hidden>
+      <div class="card">
         <h2>설정</h2>
         <div id="config"></div>
-        <div class="row-actions">
-          <button id="saveCfg" class="btn-primary">설정 저장</button>
-          <span id="cfgMsg" class="msg"></span>
-        </div>
+        <div class="row-actions"><button id="saveCfg" class="btn-primary">설정 저장</button><span id="cfgMsg" class="msg"></span></div>
       </div>
+      <div class="card">
+        <h2>백업 대상 · 제외 규칙</h2>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem">백업 루트는 <code>/home</code> · <code>/var/lib/docker/volumes</code> 로 고정입니다(컨테이너 마운트 기반). 그 안에서 <b>무엇을 제외할지</b>를 아래에서 정합니다. 한 줄에 하나, 변경은 <b>다음 백업부터</b> 적용됩니다.</p>
+        <textarea id="excludes" spellcheck="false" placeholder="**/cache&#10;/home/docker/jenkins/workspace"></textarea>
+        <div class="row-actions"><button id="saveExcludes" class="btn-primary">제외 규칙 저장</button><span id="exMsg" class="msg"></span></div>
+      </div>
+    </section>
 
-      <div style="display:grid;gap:18px">
-        <div class="card c3">
-          <h2>지금 백업</h2>
-          <p class="dim" style="margin:0 0 14px;font-size:.86rem">수동으로 즉시 백업을 실행합니다. 스케줄과 무관합니다.</p>
-          <div class="row-actions" style="margin:0">
-            <button id="backupNow" class="btn-primary">백업 실행</button>
-            <span id="actMsg" class="msg"></span>
+    <!-- 목적지 -->
+    <section class="tabpanel" data-panel="dest" hidden>
+      <div class="card">
+        <h2>목적지 연결 (rclone)</h2>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem">Google Drive · WebDAV · Synology · FTP/SFTP 등 백업 목적지를 rclone 공식 설정 화면에서 추가/수정합니다. 추가한 remote는 <b>즉시 사용 가능</b>(엔진 재시작 불필요), 활성 목적지 변경은 <code>.env</code>의 <code>REMOTE_NAME</code> 수정 후 재시작.</p>
+        <div id="rgInfo" class="dim" style="font-size:.86rem;margin-bottom:12px"></div>
+        <div class="row-actions" style="margin:0">
+          <button id="rgStart" class="btn-primary">rclone 설정 열기</button>
+          <button id="rgStop" class="btn-ghost" style="display:none">설정 화면 중지</button>
+          <span id="rgMsg" class="msg"></span>
+        </div>
+        <div style="margin-top:18px;border-top:1px solid var(--border-soft);padding-top:16px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+            <span class="dim" style="font-size:.72rem;letter-spacing:.12em;text-transform:uppercase">설정된 목적지</span>
+            <button id="rmRefresh" class="btn-ghost" style="padding:4px 10px;font-size:.78rem">새로고침</button>
           </div>
-        </div>
-        <div class="card c4">
-          <h2>스냅샷</h2>
-          <table id="snaps"></table>
+          <table id="remoteList"></table>
         </div>
       </div>
-    </div>
+    </section>
 
-    <div class="card c5">
-      <h2>목적지 연결 (rclone)</h2>
-      <p class="dim" style="margin:0 0 12px;font-size:.86rem">Google Drive · WebDAV · Synology · FTP/SFTP 등 백업 목적지를 rclone 공식 설정 화면에서 추가/수정합니다. 추가한 remote는 <b>즉시 사용 가능</b>(엔진 재시작 불필요), 활성 목적지 변경은 <code>.env</code>의 <code>REMOTE_NAME</code> 수정 후 재시작.</p>
-      <div id="rgInfo" class="dim" style="font-size:.86rem;margin-bottom:12px"></div>
-      <div class="row-actions" style="margin:0">
-        <button id="rgStart" class="btn-primary">rclone 설정 열기</button>
-        <button id="rgStop" class="btn-ghost" style="display:none">설정 화면 중지</button>
-        <span id="rgMsg" class="msg"></span>
+    <!-- 복원 -->
+    <section class="tabpanel" data-panel="restore" hidden>
+      <div class="card">
+        <h2>복원</h2>
+        <p class="dim" style="margin:0 0 14px;font-size:.86rem">선택한 스냅샷의 파일을 <code>/restore-out</code>(안전한 임시 영역)으로 복원합니다. 라이브 데이터는 절대 덮어쓰지 않습니다.</p>
+        <div class="field"><div class="lab">스냅샷</div><div class="ctl"><select id="rsnap"></select></div></div>
+        <div class="field"><div class="lab">경로 (선택)<small>비우면 전체 · 쉼표로 여러 개 · 예: /home/docker/gitea</small></div><div class="ctl"><input id="rpaths" type="text" placeholder="/home/docker/…" style="width:min(280px,60vw)"></div></div>
+        <div class="field"><div class="lab">관리자 비밀번호<small>위험 작업 재확인</small></div><div class="ctl"><input id="rpass" type="password" placeholder="••••••••" style="width:180px"></div></div>
+        <div class="row-actions">
+          <button id="restoreBtn" class="btn-primary">복원 실행</button>
+          <button id="rdl" class="btn-ghost" style="display:none">결과 다운로드 (.tar.gz)</button>
+          <span id="rmsg" class="msg"></span>
+        </div>
       </div>
-    </div>
-
-    <div class="card c5">
-      <h2>백업 대상 · 제외 규칙</h2>
-      <p class="dim" style="margin:0 0 12px;font-size:.86rem">백업 루트는 <code>/home</code> · <code>/var/lib/docker/volumes</code> 로 고정입니다(컨테이너 마운트 기반). 그 안에서 <b>무엇을 제외할지</b>를 아래에서 정합니다. 한 줄에 하나, 변경은 <b>다음 백업부터</b> 적용됩니다.</p>
-      <textarea id="excludes" spellcheck="false" placeholder="**/cache&#10;/home/docker/jenkins/workspace"></textarea>
-      <div class="row-actions">
-        <button id="saveExcludes" class="btn-primary">제외 규칙 저장</button>
-        <span id="exMsg" class="msg"></span>
-      </div>
-    </div>
-
-    <div class="card c5">
-      <h2>복원</h2>
-      <p class="dim" style="margin:0 0 14px;font-size:.86rem">선택한 스냅샷의 파일을 <code>/restore-out</code>(안전한 임시 영역)으로 복원합니다. 라이브 데이터는 절대 덮어쓰지 않습니다.</p>
-      <div class="field"><div class="lab">스냅샷</div><div class="ctl"><select id="rsnap"></select></div></div>
-      <div class="field"><div class="lab">경로 (선택)<small>비우면 전체 · 쉼표로 여러 개 · 예: /home/docker/gitea</small></div><div class="ctl"><input id="rpaths" type="text" placeholder="/home/docker/…" style="width:min(280px,60vw)"></div></div>
-      <div class="field"><div class="lab">관리자 비밀번호<small>위험 작업 재확인</small></div><div class="ctl"><input id="rpass" type="password" placeholder="••••••••" style="width:180px"></div></div>
-      <div class="row-actions">
-        <button id="restoreBtn" class="btn-primary">복원 실행</button>
-        <button id="rdl" class="btn-ghost" style="display:none">결과 다운로드 (.tar.gz)</button>
-        <span id="rmsg" class="msg"></span>
-      </div>
-    </div>
-
-    <div class="card c5">
-      <h2>실행 이력</h2>
-      <table id="history"></table>
-    </div>
+    </section>
   </main>
 </div>
 <script src="/app.js"></script>

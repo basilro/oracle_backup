@@ -91,6 +91,19 @@ main {
 .grid-2 { display: grid; gap: 18px; grid-template-columns: 1fr; }
 @media (min-width: 880px) { .grid-2 { grid-template-columns: 1.05fr .95fr; align-items: start; } }
 
+/* ---------- tabs ---------- */
+.tabs { display: flex; gap: 4px; flex-wrap: wrap; border-bottom: 1px solid var(--border); }
+button.tab {
+  background: transparent; color: var(--muted); border: 0; box-shadow: none;
+  padding: 11px 18px; border-radius: 9px 9px 0 0; font-weight: 600; font-size: .92rem;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; cursor: pointer;
+  transition: color .15s, background .15s, border-color .15s;
+}
+button.tab:hover { color: var(--text); background: rgba(255,255,255,.02); transform: none; }
+button.tab.active { color: var(--accent); border-bottom-color: var(--accent); background: var(--accent-dim); }
+.tabpanel { display: grid; gap: 18px; }
+.tabpanel[hidden] { display: none; }
+
 /* ---------- status strip ---------- */
 .strip {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr));

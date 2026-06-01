@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-01c";
+const BUILD = "ui-2026-06-01d";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -14,6 +14,32 @@ const FIELDS = [
 ];
 
 function getCsrf() { const m = document.cookie.match(/csrf=([^;]+)/); if (m) csrf = m[1]; }
+
+/* ---------- tabs ---------- */
+function initTabs() {
+  const btns = [...document.querySelectorAll("#tabs .tab")];
+  const panels = [...document.querySelectorAll(".tabpanel")];
+  const show = name => {
+    if (!panels.some(p => p.dataset.panel === name)) name = "overview";
+    btns.forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+    panels.forEach(p => { p.hidden = p.dataset.panel !== name; });
+    history.replaceState(null, "", "#" + name);
+  };
+  btns.forEach(b => b.onclick = () => show(b.dataset.tab));
+  show((location.hash || "#overview").slice(1));
+}
+
+/* ---------- configured remotes list ---------- */
+async function loadRemotes() {
+  const t = $("#remoteList"); if (!t) return;
+  try {
+    const rs = await (await api("/api/rclone-remotes")).json();
+    const rows = Array.isArray(rs) && rs.length
+      ? rs.map(x => `<tr><td class="mono">${esc(x.name)}</td><td>${esc(x.type)}</td><td>${x.active ? '<span class="st ok">활성</span>' : ""}</td></tr>`).join("")
+      : `<tr><td colspan="3" class="empty">설정된 목적지가 없습니다 — 위에서 추가하세요</td></tr>`;
+    t.innerHTML = "<thead><tr><th>이름</th><th>유형</th><th></th></tr></thead><tbody>" + rows + "</tbody>";
+  } catch (e) {}
+}
 function toLogin() { location.href = "/login"; }
 async function api(p, o = {}) {
   o.headers = Object.assign({ "Content-Type": "application/json", "X-CSRF-Token": csrf }, o.headers || {});
@@ -223,7 +249,7 @@ async function rgStop() {
   const m = $("#rgMsg");
   try {
     const r = await api("/api/rclone-gui", { method: "POST", body: JSON.stringify({ Action: "stop" }) });
-    if (r.ok) { rgRender({ running: false, port: "5572" }); m.textContent = "✓ 중지됨 (포트 닫힘)"; m.className = "msg ok"; }
+    if (r.ok) { rgRender({ running: false, port: "5572" }); m.textContent = "✓ 중지됨 (포트 닫힘)"; m.className = "msg ok"; loadRemotes(); }
     else { m.textContent = "✕ 중지 실패"; m.className = "msg fail"; }
   } catch (e) {}
 }
@@ -277,6 +303,7 @@ $("#saveCfg").onclick = saveCfg;
 $("#saveExcludes").onclick = saveExcludes;
 $("#rgStart").onclick = rgStart;
 $("#rgStop").onclick = rgStop;
+$("#rmRefresh").onclick = loadRemotes;
 $("#backupNow").onclick = backup;
 $("#restoreBtn").onclick = restore;
 $("#rdl").onclick = downloadRestore;
@@ -290,6 +317,7 @@ function failCard(sel, e) {
 
 (async () => {
   const b = $("#build"); if (b) b.textContent = BUILD;
+  initTabs();
   getCsrf();
   // Fast panels render immediately; the slow snapshot list (restic→Drive) loads
   // in the background and updates the strip count when ready.
@@ -299,6 +327,7 @@ function failCard(sel, e) {
   loadConfig().catch(e => failCard("#config", e));
   loadExcludes().catch(() => {});
   rgStatus();
+  loadRemotes();
   loadHistory().catch(e => failCard("#history", e));
   loadSnaps().then(() => { if (window._busyAtLoad) pollUntilIdle(); }).catch(e => failCard("#snaps", e));
 })();
