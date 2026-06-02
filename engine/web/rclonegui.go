@@ -120,6 +120,10 @@ func engineEnv() (hostDir, img, net string, err error) {
 	if hostDir == "" || img == "" || net == "" {
 		return hostDir, img, net, errors.New("engine 환경(마운트/이미지/네트워크) 확인 실패")
 	}
+	// defensive: values feed `docker run` argv — reject anything option-like.
+	if !strings.HasPrefix(hostDir, "/") || strings.HasPrefix(img, "-") || strings.HasPrefix(net, "-") {
+		return "", "", "", errors.New("비정상 engine 환경 값")
+	}
 	return hostDir, img, net, nil
 }
 

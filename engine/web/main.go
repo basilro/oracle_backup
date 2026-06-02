@@ -144,6 +144,7 @@ func main() {
 	if err := stopRcloneGUI(); err != nil {
 		log.Printf("rclone-gui boot reconcile: %v", err)
 	}
+	reconcileTermContainers()
 
 	runner := NewRunner(store, "/opt/backup/scripts", "/var/log/backup")
 
