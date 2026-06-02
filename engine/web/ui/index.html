@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=20260602a">
+<link rel="stylesheet" href="/style.css?v=20260602b">
 </head>
 <body>
 <div id="app">
@@ -91,6 +91,22 @@
           <table id="remoteList"></table>
         </div>
       </div>
+
+      <div class="card">
+        <h2>rclone CLI (명령 실행)</h2>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem">조회·설정 명령을 실행합니다. 예: <code>listremotes</code> · <code>lsd gdrive:</code> · <code>config redacted</code> · <code>config delete 이름</code> · <code>about gdrive:</code>. <span style="color:var(--fail)">데이터 삭제/전송(delete·purge·sync·copy 등)은 차단됩니다.</span></p>
+        <div class="cli-row">
+          <span class="cli-prompt">rclone</span>
+          <input id="cliInput" type="text" placeholder="lsd gdrive:" spellcheck="false" autocomplete="off">
+          <button id="cliRun" class="btn-primary">실행</button>
+        </div>
+        <div class="cli-quick" id="cliQuick">
+          <button data-cmd="listremotes">listremotes</button>
+          <button data-cmd="config redacted">config redacted</button>
+          <button data-cmd="version">version</button>
+        </div>
+        <pre id="cliOut" class="cli-out" hidden></pre>
+      </div>
     </section>
 
     <!-- 복원 -->
@@ -124,6 +140,6 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=20260602a"></script>
+<script src="/app.js?v=20260602b"></script>
 </body>
 </html>

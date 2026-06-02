@@ -109,6 +109,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/rclone-gui", s.requireAuth(s.handleRcloneGUI))
 	mux.HandleFunc("/api/rclone-remotes", s.requireAuth(s.handleRcloneRemotes))
 	mux.HandleFunc("/api/rclone-add", s.requireAuth(s.handleRcloneAdd))
+	mux.HandleFunc("/api/rclone-cli", s.requireAuth(s.handleRcloneCLI))
 	mux.HandleFunc("/rclone-gui/", s.requireAuth(s.handleRcloneGUIProxy))
 	mux.HandleFunc("/", s.handleRoot)
 	return mux
@@ -515,6 +516,43 @@ func (s *Server) handleRcloneAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.Audit(user, "rclone-add", "ok")
 	s.writeJSON(w, 200, map[string]string{"status": "created", "name": body.Name})
+}
+
+// handleRcloneCLI runs a whitelisted rclone subcommand and returns its output.
+func (s *Server) handleRcloneCLI(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method", 405)
+		return
+	}
+	if !s.checkCSRF(r) {
+		http.Error(w, "csrf", 403)
+		return
+	}
+	var body struct{ Cmd string }
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad", 400)
+		return
+	}
+	args := splitArgs(strings.TrimSpace(body.Cmd))
+	if len(args) == 0 {
+		http.Error(w, "명령을 입력하세요", 400)
+		return
+	}
+	sub := ""
+	for _, a := range args {
+		if !strings.HasPrefix(a, "-") {
+			sub = a
+			break
+		}
+	}
+	if !rcloneCLIAllowed[sub] {
+		http.Error(w, "허용되지 않은 명령: "+sub+" (조회·설정 명령만 가능; 삭제/전송류 차단)", 400)
+		return
+	}
+	user, _ := s.currentUser(r)
+	out, _ := runRcloneCLI(r.Context(), args)
+	s.store.Audit(user, "rclone-cli:"+sub, "run")
+	s.writeJSON(w, 200, map[string]string{"output": out})
 }
 
 // handleRcloneGUIProxy reverse-proxies /rclone-gui/* to the GUI container on the

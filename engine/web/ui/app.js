@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-02a";
+const BUILD = "ui-2026-06-02b";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -83,6 +83,23 @@ async function addRemote() {
     if (r.ok) { m.textContent = "✓ 추가됨: " + name; m.className = "msg ok"; $("#addName").value = ""; loadRemotes(); }
     else { m.textContent = "✕ " + (await r.text()); m.className = "msg fail"; }
   } catch (e) { if (String(e.message) !== "unauthorized") { m.textContent = "✕ " + e.message; m.className = "msg fail"; } }
+  btn.disabled = false;
+}
+
+/* ---------- rclone CLI ---------- */
+async function cliRun(cmd) {
+  const input = $("#cliInput");
+  const c = (cmd != null ? cmd : input.value).trim();
+  if (cmd != null) input.value = cmd;
+  if (!c) return;
+  const out = $("#cliOut");
+  out.hidden = false; out.textContent = "$ rclone " + c + "\n실행 중…";
+  const btn = $("#cliRun"); btn.disabled = true;
+  try {
+    const r = await api("/api/rclone-cli", { method: "POST", body: JSON.stringify({ Cmd: c }) });
+    if (r.ok) { out.textContent = "$ rclone " + c + "\n\n" + ((await r.json()).output || "(출력 없음)"); }
+    else { out.textContent = "$ rclone " + c + "\n\n✕ " + (await r.text()); }
+  } catch (e) { if (String(e.message) !== "unauthorized") out.textContent = "✕ " + e.message; }
   btn.disabled = false;
 }
 
@@ -363,6 +380,9 @@ $("#rmRefresh").onclick = loadRemotes;
 $("#addType").onchange = renderAddFields;
 $("#addBtn").onclick = addRemote;
 renderAddFields();
+$("#cliRun").onclick = () => cliRun();
+$("#cliInput").addEventListener("keydown", e => { if (e.key === "Enter") cliRun(); });
+$("#cliQuick").addEventListener("click", e => { const b = e.target.closest("button[data-cmd]"); if (b) cliRun(b.dataset.cmd); });
 $("#backupNow").onclick = backup;
 $("#restoreBtn").onclick = restore;
 $("#rdl").onclick = downloadRestore;

@@ -217,6 +217,16 @@ tbody tr:hover { background: rgba(255,255,255,.018); }
 
 .empty { color: var(--faint); font-family: var(--font-mono); font-size: .82rem; padding: 8px 2px; }
 
+/* ---------- rclone CLI ---------- */
+.cli-row { display: flex; align-items: center; gap: 8px; }
+.cli-prompt { font-family: var(--font-mono); color: var(--accent); font-size: .9rem; }
+.cli-row input { flex: 1; font-family: var(--font-mono); }
+.cli-quick { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cli-quick button { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 4px 11px; font-size: .78rem; font-family: var(--font-mono); border-radius: 7px; box-shadow: none; transform: none; }
+.cli-quick button:hover { border-color: var(--accent); color: var(--accent); transform: none; }
+.cli-out { margin-top: 14px; background: #07090d; border: 1px solid var(--border); border-radius: 9px; padding: 14px; font-family: var(--font-mono); font-size: .8rem; line-height: 1.55; color: #c9d2e0; max-height: 420px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.cli-out[hidden] { display: none; }
+
 /* ---------- modal (rclone GUI) ---------- */
 .modal { position: fixed; inset: 0; z-index: 50; background: rgba(5,7,10,.72); backdrop-filter: blur(4px); display: grid; place-items: center; padding: 24px; }
 .modal[hidden] { display: none; }

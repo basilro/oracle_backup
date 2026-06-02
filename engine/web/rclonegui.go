@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -152,6 +153,57 @@ func createRemote(name, typ string, params [][2]string) error {
 		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
+}
+
+// rcloneCLIAllowed limits the web CLI to read/inspect + config-management
+// subcommands; destructive data ops (delete/purge/sync/copy/move/rmdir…) are blocked.
+var rcloneCLIAllowed = map[string]bool{
+	"config": true, "listremotes": true, "lsd": true, "ls": true, "lsl": true,
+	"lsf": true, "lsjson": true, "tree": true, "about": true, "size": true,
+	"version": true, "cat": true, "hashsum": true, "md5sum": true, "sha1sum": true,
+}
+
+// splitArgs is a minimal quote-aware splitter (no shell; values become argv).
+func splitArgs(s string) []string {
+	var args []string
+	var cur strings.Builder
+	inq := false
+	flush := func() {
+		if cur.Len() > 0 {
+			args = append(args, cur.String())
+			cur.Reset()
+		}
+	}
+	for _, r := range s {
+		switch {
+		case r == '"':
+			inq = !inq
+		case (r == ' ' || r == '\t') && !inq:
+			flush()
+		default:
+			cur.WriteRune(r)
+		}
+	}
+	flush()
+	return args
+}
+
+// runRcloneCLI runs `rclone <args>` in a one-off container (rw ./rclone mount,
+// default-bridge network for cloud access), 60s timeout. Returns combined output.
+func runRcloneCLI(ctx context.Context, rcArgs []string) (string, error) {
+	hostDir, img, _, err := engineEnv()
+	if err != nil {
+		return "", err
+	}
+	cctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	args := []string{"run", "--rm",
+		"-e", "RCLONE_CONFIG=/etc/rclone/rclone.conf",
+		"--mount", "type=bind,source=" + hostDir + ",destination=/etc/rclone",
+		"--entrypoint", "rclone", img}
+	args = append(args, rcArgs...)
+	out, err := exec.CommandContext(cctx, "docker", args...).CombinedOutput()
+	return string(out), err
 }
 
 // startRcloneGUI (re)launches the GUI on the engine's docker network (no host port).
