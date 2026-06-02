@@ -240,6 +240,24 @@ tbody tr:hover { background: rgba(255,255,255,.018); }
 .term-input input { flex: 1; font-family: "IBM Plex Mono", monospace; }
 .term-input .btn-primary { padding: 9px 18px; }
 .term-hint { font-size: .72rem; padding: 0 12px 8px; background: #000; }
+/* restore path browser */
+.br-crumb { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; padding: 11px 16px; border-bottom: 1px solid var(--border); font-family: var(--font-mono); font-size: .82rem; }
+.br-crumb a { color: var(--accent); cursor: pointer; }
+.br-crumb a:hover { text-decoration: underline; }
+.br-crumb .sep { color: var(--muted); }
+.br-list { flex: 1; overflow: auto; padding: 4px 0; }
+.br-row { display: flex; align-items: center; gap: 11px; padding: 7px 16px; }
+.br-row:hover { background: rgba(255,255,255,.03); }
+.br-row .nm { flex: 1; font-family: var(--font-mono); font-size: .86rem; }
+.br-row .nm.dir { color: var(--accent-2); cursor: pointer; }
+.br-row .nm.dir:hover { text-decoration: underline; }
+.br-row .sz { color: var(--muted); font-size: .74rem; }
+.br-row input[type=checkbox] { width: 16px; height: 16px; flex: none; }
+.br-sel { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 16px; border-top: 1px solid var(--border); min-height: 44px; align-items: center; }
+.br-chip { background: #1b2433; border: 1px solid var(--border); border-radius: 999px; padding: 3px 6px 3px 11px; font-size: .76rem; font-family: var(--font-mono); display: inline-flex; gap: 6px; align-items: center; }
+.br-chip button { background: none; border: 0; color: var(--muted); cursor: pointer; font-size: .85rem; line-height: 1; padding: 0 2px; }
+.br-chip button:hover { color: var(--accent); }
+.br-empty { color: var(--muted); font-size: .82rem; padding: 22px 16px; }
 #rgFrame { flex: 1; width: 100%; border: 0; background: #fff; }
 #rgFrame[hidden] { display: none; }
 

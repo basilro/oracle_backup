@@ -7,10 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=20260602e">
-<link rel="stylesheet" href="/vendor/xterm.css?v=20260602e">
-<script src="/vendor/xterm.js?v=20260602e"></script>
-<script src="/vendor/xterm-addon-fit.js?v=20260602e"></script>
+<link rel="stylesheet" href="/style.css?v=20260603b">
+<link rel="stylesheet" href="/vendor/xterm.css?v=20260603b">
+<script src="/vendor/xterm.js?v=20260603b"></script>
+<script src="/vendor/xterm-addon-fit.js?v=20260603b"></script>
 </head>
 <body>
 <div id="app">
@@ -122,7 +122,7 @@
         <h2>복원</h2>
         <p class="dim" style="margin:0 0 14px;font-size:.86rem">선택한 스냅샷의 파일을 <code>/restore-out</code>(안전한 임시 영역)으로 복원합니다. 라이브 데이터는 절대 덮어쓰지 않습니다.</p>
         <div class="field"><div class="lab">스냅샷</div><div class="ctl"><select id="rsnap"></select></div></div>
-        <div class="field"><div class="lab">경로 (선택)<small>비우면 전체 · 쉼표로 여러 개 · 예: /home/docker/gitea</small></div><div class="ctl"><input id="rpaths" type="text" placeholder="/home/docker/…" style="width:min(280px,60vw)"></div></div>
+        <div class="field"><div class="lab">경로 (선택)<small>비우면 전체 · 쉼표로 여러 개 · 예: /home/docker/gitea</small></div><div class="ctl"><input id="rpaths" type="text" placeholder="/home/docker/…" style="width:min(280px,60vw)"><button id="browseBtn" type="button" class="btn-ghost" style="margin-left:8px">경로 선택…</button></div></div>
         <div class="field"><div class="lab">관리자 비밀번호<small>위험 작업 재확인</small></div><div class="ctl"><input id="rpass" type="password" placeholder="••••••••" style="width:180px"></div></div>
         <div class="row-actions">
           <button id="restoreBtn" class="btn-primary">복원 실행</button>
@@ -151,6 +151,21 @@
     </div>
   </div>
 
+  <div id="browseModal" class="modal" hidden>
+    <div class="modal-box" style="height:min(80vh,760px)">
+      <div class="modal-head">
+        <b>복원 경로 선택</b>
+        <span class="dim" id="brSnap" style="font-size:.8rem"></span>
+        <span class="spacer"></span>
+        <button id="brCancel" class="btn-ghost">취소</button>
+        <button id="brConfirm" class="btn-primary">확인</button>
+      </div>
+      <div class="br-crumb" id="brCrumb"></div>
+      <div class="br-list" id="brList"></div>
+      <div class="br-sel" id="brSel"></div>
+    </div>
+  </div>
+
   <div id="rgModal" class="modal" hidden>
     <div class="modal-box">
       <div class="modal-head">
@@ -165,6 +180,6 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=20260602e"></script>
+<script src="/app.js?v=20260603b"></script>
 </body>
 </html>

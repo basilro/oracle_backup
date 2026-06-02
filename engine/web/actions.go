@@ -70,10 +70,28 @@ func within(parent, child string) bool {
 	return strings.HasPrefix(child, parent)
 }
 
-// safeResticPath rejects shell/space metacharacters in an ls path argument.
-var pathSafeRe = regexp.MustCompile(`^[A-Za-z0-9_./-]*$`)
-
-func safeResticPath(p string) bool { return p == "" || pathSafeRe.MatchString(p) }
+// safeResticPath accepts real snapshot paths (including spaces and unicode, e.g.
+// Korean filenames) while blocking control chars, ".." traversal, and shell
+// metacharacters as defense in depth. The value is passed as an exec argv
+// (never through a shell), so this is belt-and-suspenders, not the sole barrier.
+func safeResticPath(p string) bool {
+	if p == "" {
+		return true
+	}
+	if strings.Contains(p, "..") {
+		return false
+	}
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+		switch r {
+		case '`', '$', ';', '|', '&', '<', '>', '"', '\'', '\\', '*', '?':
+			return false
+		}
+	}
+	return true
+}
 
 type Runner struct {
 	gate    sync.Mutex  // serialization gate, held via TryLock/Unlock only

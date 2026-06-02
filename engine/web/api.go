@@ -14,8 +14,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -230,6 +232,16 @@ func (s *Server) handleSnapshots(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, snaps)
 }
 
+// lsCache memoizes snapshot-ls results. Snapshots are immutable and the picker
+// always passes a concrete short_id (never "latest"), so a directory's listing
+// never changes — caching for the process lifetime makes re-navigating (and
+// walking back up the breadcrumb) instant despite each restic ls costing ~10s
+// over rclone→Drive.
+var (
+	lsCacheMu sync.Mutex
+	lsCache   = map[string][]byte{}
+)
+
 func (s *Server) handleSnapshotLs(w http.ResponseWriter, r *http.Request) {
 	snap := r.URL.Query().Get("id")
 	path := r.URL.Query().Get("path")
@@ -240,18 +252,67 @@ func (s *Server) handleSnapshotLs(w http.ResponseWriter, r *http.Request) {
 	if path == "" {
 		path = "/"
 	}
+	cacheKey := snap + "\x00" + path
+	lsCacheMu.Lock()
+	cached, ok := lsCache[cacheKey]
+	lsCacheMu.Unlock()
+	if ok {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(cached)
+		return
+	}
 	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "restic", "ls", snap, path).Output()
+	// `restic ls` is non-recursive by default → exactly one directory level,
+	// which is what the path-picker browses. --json gives dir/file + size.
+	out, err := exec.CommandContext(ctx, "restic", "ls", "--json", snap, path).Output()
 	if err != nil {
 		s.writeJSON(w, 502, map[string]string{"error": "ls failed"})
 		return
 	}
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	if len(lines) > 500 {
-		lines = lines[:500]
+	type entry struct {
+		Name string `json:"name"`
+		Type string `json:"type"`
+		Path string `json:"path"`
+		Size int64  `json:"size"`
 	}
-	s.writeJSON(w, 200, map[string]any{"entries": lines})
+	var entries []entry
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+		var n struct {
+			Name       string `json:"name"`
+			Type       string `json:"type"`
+			Path       string `json:"path"`
+			Size       int64  `json:"size"`
+			StructType string `json:"struct_type"`
+		}
+		if json.Unmarshal([]byte(line), &n) != nil || n.StructType != "node" {
+			continue // skip the leading snapshot object
+		}
+		if n.Path == path {
+			continue // restic lists the directory itself; show only its children
+		}
+		entries = append(entries, entry{Name: n.Name, Type: n.Type, Path: n.Path, Size: n.Size})
+		if len(entries) >= 1000 {
+			break
+		}
+	}
+	// directories first, then files; each alphabetical
+	sort.Slice(entries, func(i, j int) bool {
+		if (entries[i].Type == "dir") != (entries[j].Type == "dir") {
+			return entries[i].Type == "dir"
+		}
+		return entries[i].Name < entries[j].Name
+	})
+	resp, _ := json.Marshal(map[string]any{"path": path, "entries": entries})
+	lsCacheMu.Lock()
+	lsCache[cacheKey] = resp
+	lsCacheMu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(resp)
 }
 
 func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {

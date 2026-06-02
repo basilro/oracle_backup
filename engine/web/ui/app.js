@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-02e";
+const BUILD = "ui-2026-06-03b";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -409,6 +409,57 @@ async function restore() {
 }
 function downloadRestore() { window.location.href = "/api/restore-download"; }
 
+/* ---------- restore path browser (modal) ---------- */
+let brPath = "/", brSel = new Set();
+function browseOpen() {
+  const snap = $("#rsnap").value;
+  if (!snap) { const m = $("#rmsg"); m.textContent = "먼저 스냅샷을 선택하세요"; m.className = "msg fail"; return; }
+  $("#brSnap").textContent = "스냅샷 " + snap;
+  brSel = new Set($("#rpaths").value.split(/[\n,]/).map(s => s.trim()).filter(Boolean));
+  $("#browseModal").hidden = false;
+  brRenderSel();
+  brLoad("/");
+}
+function browseClose() { $("#browseModal").hidden = true; }
+async function brLoad(path) {
+  brPath = path || "/";
+  brRenderCrumb();
+  const list = $("#brList");
+  list.innerHTML = `<div class="br-empty">불러오는 중… (원격 저장소 조회, 처음 여는 폴더는 십수 초 걸릴 수 있습니다)</div>`;
+  const snap = $("#rsnap").value;
+  try {
+    const r = await api(`/api/snapshot-ls?id=${encodeURIComponent(snap)}&path=${encodeURIComponent(brPath)}`);
+    if (!r.ok) { list.innerHTML = `<div class="br-empty">목록을 불러오지 못했습니다 (${r.status})</div>`; return; }
+    const d = await r.json();
+    const entries = d.entries || [];
+    if (!entries.length) { list.innerHTML = `<div class="br-empty">빈 폴더입니다.</div>`; return; }
+    list.innerHTML = entries.map(e => {
+      const dir = e.type === "dir";
+      const sz = dir ? "" : `<span class="sz">${esc(fmtB(e.size))}</span>`;
+      return `<div class="br-row">
+        <input type="checkbox" data-path="${esc(e.path)}" ${brSel.has(e.path) ? "checked" : ""}>
+        <span class="nm ${dir ? "dir" : ""}" ${dir ? `data-dir="${esc(e.path)}"` : ""}>${dir ? "📁" : "📄"} ${esc(e.name)}</span>
+        ${sz}</div>`;
+    }).join("");
+  } catch (e) { list.innerHTML = `<div class="br-empty">오류: ${esc(e.message)}</div>`; }
+}
+function brRenderCrumb() {
+  const parts = brPath.split("/").filter(Boolean);
+  let acc = "";
+  const segs = [`<a data-p="/">/(루트)</a>`];
+  for (const p of parts) { acc += "/" + p; segs.push(`<span class="sep">›</span><a data-p="${esc(acc)}">${esc(p)}</a>`); }
+  segs.push(`<span class="sep" style="flex:1"></span><a data-add="${esc(brPath)}" style="font-weight:600">＋ 이 폴더 추가</a>`);
+  $("#brCrumb").innerHTML = segs.join(" ");
+}
+function brRenderSel() {
+  const box = $("#brSel");
+  if (!brSel.size) { box.innerHTML = `<span class="dim" style="font-size:.78rem">선택된 경로 없음 · 비우면 전체 복원</span>`; return; }
+  box.innerHTML = [...brSel].sort().map(p => `<span class="br-chip">${esc(p)}<button data-del="${esc(p)}">✕</button></span>`).join("");
+}
+function brSyncChecks() {
+  document.querySelectorAll("#brList input[type=checkbox]").forEach(cb => { cb.checked = brSel.has(cb.getAttribute("data-path")); });
+}
+
 async function logout() { try { await api("/logout", { method: "POST" }); } catch (e) {} toLogin(); }
 
 $("#saveCfg").onclick = saveCfg;
@@ -430,6 +481,21 @@ $("#termInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.pr
 $("#backupNow").onclick = backup;
 $("#restoreBtn").onclick = restore;
 $("#rdl").onclick = downloadRestore;
+$("#browseBtn").onclick = browseOpen;
+$("#brCancel").onclick = browseClose;
+$("#brConfirm").onclick = () => { $("#rpaths").value = [...brSel].sort().join(", "); browseClose(); };
+$("#brCrumb").addEventListener("click", e => {
+  const nav = e.target.closest("a[data-p]"); if (nav) { brLoad(nav.getAttribute("data-p")); return; }
+  const add = e.target.closest("a[data-add]"); if (add) { brSel.add(add.getAttribute("data-add")); brRenderSel(); brSyncChecks(); }
+});
+$("#brList").addEventListener("click", e => {
+  const dir = e.target.closest(".nm.dir"); if (dir) { brLoad(dir.getAttribute("data-dir")); return; }
+  const cb = e.target.closest("input[type=checkbox]");
+  if (cb) { const p = cb.getAttribute("data-path"); if (cb.checked) brSel.add(p); else brSel.delete(p); brRenderSel(); }
+});
+$("#brSel").addEventListener("click", e => {
+  const del = e.target.closest("button[data-del]"); if (del) { brSel.delete(del.getAttribute("data-del")); brRenderSel(); brSyncChecks(); }
+});
 $("#logout").onclick = logout;
 
 function failCard(sel, e) {
