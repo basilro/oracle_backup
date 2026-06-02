@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=20260602b">
+<link rel="stylesheet" href="/style.css?v=20260602c">
 </head>
 <body>
 <div id="app">
@@ -94,7 +94,7 @@
 
       <div class="card">
         <h2>rclone CLI (명령 실행)</h2>
-        <p class="dim" style="margin:0 0 12px;font-size:.86rem">조회·설정 명령을 실행합니다. 예: <code>listremotes</code> · <code>lsd gdrive:</code> · <code>config redacted</code> · <code>config delete 이름</code> · <code>about gdrive:</code>. <span style="color:var(--fail)">데이터 삭제/전송(delete·purge·sync·copy 등)은 차단됩니다.</span></p>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem">한 줄(one-shot) 실행입니다. 조회: <code>listremotes</code> · <code>lsd gdrive:</code> · <code>about gdrive:</code>. 설정은 <b>대화형 마법사 대신 한 줄 명령</b>으로: <code>config create 이름 webdav url=… user=… pass=…</code> · <code>config update</code> · <code>config delete 이름</code> · <code>config show</code> · <code>config redacted</code>. <span style="color:var(--fail)">대화형 <code>config</code>(단계 선택식)·삭제/전송류는 불가</span> — 그건 위 "목적지 추가" 폼이나 "rclone 설정 열기"(GUI)를 쓰세요.</p>
         <div class="cli-row">
           <span class="cli-prompt">rclone</span>
           <input id="cliInput" type="text" placeholder="lsd gdrive:" spellcheck="false" autocomplete="off">
@@ -140,6 +140,6 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=20260602b"></script>
+<script src="/app.js?v=20260602c"></script>
 </body>
 </html>

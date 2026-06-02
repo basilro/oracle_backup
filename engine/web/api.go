@@ -549,6 +549,26 @@ func (s *Server) handleRcloneCLI(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "허용되지 않은 명령: "+sub+" (조회·설정 명령만 가능; 삭제/전송류 차단)", 400)
 		return
 	}
+	// Bare/interactive `config` needs step-by-step input which a one-shot runner
+	// can't provide — guide the user to the non-interactive subcommands / GUI.
+	if sub == "config" {
+		csub := ""
+		seen := false
+		for _, a := range args {
+			if a == "config" {
+				seen = true
+				continue
+			}
+			if seen && !strings.HasPrefix(a, "-") {
+				csub = a
+				break
+			}
+		}
+		if csub == "" || csub == "edit" || csub == "reconnect" {
+			http.Error(w, "대화형 'rclone config' 마법사는 단계별 입력이 필요해 이 CLI에서는 실행할 수 없습니다.\n한 줄 명령을 쓰세요: config create / update / delete / show / dump / redacted / providers\n예) config create mynas webdav url=https://nas:5006 vendor=other user=U pass=P\n또는 '목적지 추가' 폼(간편) 이나 'rclone 설정 열기'(GUI)를 이용하세요.", 400)
+			return
+		}
+	}
 	user, _ := s.currentUser(r)
 	out, _ := runRcloneCLI(r.Context(), args)
 	s.store.Audit(user, "rclone-cli:"+sub, "run")

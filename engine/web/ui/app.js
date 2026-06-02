@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-02b";
+const BUILD = "ui-2026-06-02c";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
