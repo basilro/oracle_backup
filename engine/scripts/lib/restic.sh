@@ -51,5 +51,10 @@ restic_backup() {  # $1=summary-out-file
     return "$rc"
 }
 
+# 강제종료(컨테이너 재시작/크래시)로 남은 stale 잠금 정리. plain `unlock`은 죽은
+# 프로세스의 잠금만 제거하고 살아있는 잠금은 건드리지 않으므로, 정상 restic 작업이
+# 동시에 돌아도 안전하다. 누수된 배타 잠금 때문에 forget+prune이 실패하는 것을 방지.
+restic_unlock_stale() { log "clearing stale locks (if any)"; "$RESTIC_BIN" unlock || warn "unlock returned non-zero (continuing)"; }
+
 restic_forget() { log "forget keep-daily=${KEEP_DAILY:-7}"; "$RESTIC_BIN" forget --keep-daily "${KEEP_DAILY:-7}" --tag auto --prune; }
 restic_check()  { log "check subset=${1:-5%}"; "$RESTIC_BIN" check --read-data-subset="${1:-5%}"; }

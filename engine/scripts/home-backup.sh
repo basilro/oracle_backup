@@ -30,6 +30,9 @@ mkdir -p "$STAGE"
 # 사전 연결 확인 (init 안 함)
 restic_ensure_repo
 
+# 이전 실행이 강제종료되어 남긴 stale 잠금 정리(없으면 무동작). forget의 배타 잠금 실패 예방.
+restic_unlock_stale
+
 # 여유 공간 (staging)
 FREE_MB=$(df -Pm "$STAGING_ROOT" | awk 'NR==2{print $4}')
 [ "${FREE_MB:-0}" -ge "${DB_DUMP_MIN_FREE_MB:-5000}" ] || { notify fail "low disk ${FREE_MB}MB"; die "low free space ${FREE_MB}MB"; }
