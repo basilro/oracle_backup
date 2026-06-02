@@ -108,6 +108,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/restore-download", s.requireAuth(s.handleRestoreDownload))
 	mux.HandleFunc("/api/rclone-gui", s.requireAuth(s.handleRcloneGUI))
 	mux.HandleFunc("/api/rclone-remotes", s.requireAuth(s.handleRcloneRemotes))
+	mux.HandleFunc("/api/rclone-add", s.requireAuth(s.handleRcloneAdd))
 	mux.HandleFunc("/rclone-gui/", s.requireAuth(s.handleRcloneGUIProxy))
 	mux.HandleFunc("/", s.handleRoot)
 	return mux
@@ -455,6 +456,65 @@ func (s *Server) handleRestore(w http.ResponseWriter, r *http.Request) {
 	}
 	s.store.Audit(user, "restore", "ok")
 	s.writeJSON(w, 200, map[string]string{"status": "restored", "target": safe})
+}
+
+// handleRcloneAdd creates a non-OAuth rclone remote from the Korean form via a
+// one-off `rclone config create`. Validates name + type + param keys; values are
+// passed as argv (no shell), passwords obscured by rclone.
+func (s *Server) handleRcloneAdd(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method", 405)
+		return
+	}
+	if !s.checkCSRF(r) {
+		http.Error(w, "csrf", 403)
+		return
+	}
+	var body struct {
+		Name, Type string
+		Params     map[string]string
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad", 400)
+		return
+	}
+	if body.Name == "" || !identRe.MatchString(body.Name) || len(body.Name) > 64 {
+		http.Error(w, "이름은 영문/숫자/_-. 만 가능", 400)
+		return
+	}
+	allowed, ok := rcloneBackends[body.Type]
+	if !ok {
+		http.Error(w, "지원하지 않는 유형", 400)
+		return
+	}
+	inAllowed := func(k string) bool {
+		for _, a := range allowed {
+			if a == k {
+				return true
+			}
+		}
+		return false
+	}
+	var params [][2]string
+	for k, v := range body.Params {
+		if !inAllowed(k) {
+			http.Error(w, "허용되지 않은 항목: "+k, 400)
+			return
+		}
+		if strings.ContainsAny(v, "\n\r") {
+			http.Error(w, "값에 줄바꿈 불가", 400)
+			return
+		}
+		params = append(params, [2]string{k, v})
+	}
+	user, _ := s.currentUser(r)
+	if err := createRemote(body.Name, body.Type, params); err != nil {
+		s.store.Audit(user, "rclone-add", "fail")
+		s.writeJSON(w, 500, map[string]string{"error": Redact(err.Error())})
+		return
+	}
+	s.store.Audit(user, "rclone-add", "ok")
+	s.writeJSON(w, 200, map[string]string{"status": "created", "name": body.Name})
 }
 
 // handleRcloneGUIProxy reverse-proxies /rclone-gui/* to the GUI container on the

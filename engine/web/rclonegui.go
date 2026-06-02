@@ -94,38 +94,72 @@ func rcloneGUIActive() bool {
 	return rgActive
 }
 
-// startRcloneGUI (re)launches the GUI on the engine's docker network (no host port).
-func startRcloneGUI() error {
+// engineEnv inspects the engine's own container to learn the host path of the
+// ./rclone mount, the image name, and its docker network — needed to spawn
+// sibling containers (GUI, one-off config create) that can write rclone.conf.
+func engineEnv() (hostDir, img, net string, err error) {
 	ref, err := selfRef()
 	if err != nil {
-		return err
+		return "", "", "", err
 	}
 	self, err := dockerInspect(ref)
 	if err != nil {
-		return fmt.Errorf("engine 컨테이너 inspect 실패: %v", err)
+		return "", "", "", fmt.Errorf("engine 컨테이너 inspect 실패: %v", err)
 	}
-	hostDir := ""
 	for _, m := range self.Mounts {
 		if m.Destination == "/etc/rclone" {
 			hostDir = m.Source
 		}
 	}
-	if hostDir == "" {
-		return errors.New("/etc/rclone 마운트(호스트 경로)를 찾을 수 없음")
-	}
-	img := self.Config.Image
-	if img == "" {
-		return errors.New("engine 이미지 이름을 확인할 수 없음")
-	}
-	net := ""
+	img = self.Config.Image
 	for n := range self.NetworkSettings.Networks {
 		net = n
 		break
 	}
-	if net == "" {
-		return errors.New("engine 도커 네트워크를 확인할 수 없음")
+	if hostDir == "" || img == "" || net == "" {
+		return hostDir, img, net, errors.New("engine 환경(마운트/이미지/네트워크) 확인 실패")
 	}
+	return hostDir, img, net, nil
+}
 
+// rcloneBackends maps a backend type to its allowed config parameter keys
+// (non-OAuth backends configurable from a simple form).
+var rcloneBackends = map[string][]string{
+	"webdav": {"url", "vendor", "user", "pass"},
+	"sftp":   {"host", "user", "pass", "port"},
+	"ftp":    {"host", "user", "pass", "port"},
+	"s3":     {"provider", "access_key_id", "secret_access_key", "endpoint", "region"},
+}
+
+// createRemote runs a one-off `rclone config create` (rw ./rclone mount) so the
+// engine's read-only config stays untouched. rclone obscures passwords itself.
+func createRemote(name, typ string, params [][2]string) error {
+	hostDir, img, _, err := engineEnv()
+	if err != nil {
+		return err
+	}
+	args := []string{"run", "--rm",
+		"--mount", "type=bind,source=" + hostDir + ",destination=/etc/rclone",
+		"--entrypoint", "rclone", img,
+		"config", "create", name, typ}
+	for _, p := range params {
+		if p[1] != "" {
+			args = append(args, p[0]+"="+p[1])
+		}
+	}
+	args = append(args, "--config", "/etc/rclone/rclone.conf")
+	if out, err := exec.Command("docker", args...).CombinedOutput(); err != nil {
+		return fmt.Errorf("%v: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// startRcloneGUI (re)launches the GUI on the engine's docker network (no host port).
+func startRcloneGUI() error {
+	hostDir, img, net, err := engineEnv()
+	if err != nil {
+		return err
+	}
 	_ = forceRemove(rgName)
 
 	// No -p: reachable only inside `net` (by container name), never on the host.

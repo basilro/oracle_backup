@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=20260601g">
+<link rel="stylesheet" href="/style.css?v=20260602a">
 </head>
 <body>
 <div id="app">
@@ -61,8 +61,24 @@
     <!-- 목적지 -->
     <section class="tabpanel" data-panel="dest" hidden>
       <div class="card">
-        <h2>목적지 연결 (rclone)</h2>
-        <p class="dim" style="margin:0 0 12px;font-size:.86rem">Google Drive · WebDAV · Synology · FTP/SFTP 등 백업 목적지를 rclone 공식 설정 화면(이 창 안 모달)에서 추가/수정합니다. 추가한 remote는 <b>즉시 사용 가능</b>(엔진 재시작 불필요), 활성 목적지 변경은 <code>.env</code>의 <code>REMOTE_NAME</code> 수정 후 재시작. <span class="dim">별도 포트(5572) 노출 없이 대시보드를 통해 안전하게 연결됩니다.</span></p>
+        <h2>목적지 추가 (간편)</h2>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem">WebDAV · Synology · SFTP · FTP · S3 같은 목적지를 한글 폼으로 바로 추가합니다. <b>Google Drive 등 OAuth</b>는 아래 "rclone 공식 설정"에서 추가하세요.</p>
+        <div class="field"><div class="lab">이름<small>영문/숫자/_-. (REMOTE_NAME 으로 쓰는 이름)</small></div><div class="ctl"><input id="addName" type="text" placeholder="mynas" style="width:min(220px,55vw)"></div></div>
+        <div class="field"><div class="lab">유형</div><div class="ctl">
+          <select id="addType">
+            <option value="webdav">WebDAV (Synology/Nextcloud)</option>
+            <option value="sftp">SFTP (SSH)</option>
+            <option value="ftp">FTP</option>
+            <option value="s3">S3 호환</option>
+          </select>
+        </div></div>
+        <div id="addFields"></div>
+        <div class="row-actions"><button id="addBtn" class="btn-primary">목적지 추가</button><span id="addMsg" class="msg"></span></div>
+      </div>
+
+      <div class="card">
+        <h2>rclone 공식 설정 · 설정된 목적지</h2>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem"><b>Google Drive 등 OAuth</b>나 세밀한 편집은 rclone 공식 설정 화면(이 창 안 모달, 영어)에서 합니다. 추가/변경한 remote는 <b>즉시 사용 가능</b>(엔진 재시작 불필요), 활성 목적지 변경은 <code>.env</code>의 <code>REMOTE_NAME</code> 수정 후 재시작. <span class="dim">별도 포트 노출 없이 대시보드를 통해 안전하게 연결됩니다.</span></p>
         <div class="row-actions" style="margin:0">
           <button id="rgStart" class="btn-primary">rclone 설정 열기</button>
           <span id="rgMsg" class="msg"></span>
@@ -108,6 +124,6 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=20260601g"></script>
+<script src="/app.js?v=20260602a"></script>
 </body>
 </html>

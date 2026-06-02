@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-01g";
+const BUILD = "ui-2026-06-02a";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -30,6 +30,60 @@ function initTabs() {
     if (b && b.dataset.tab) showTab(b.dataset.tab);
   });
   showTab((location.hash || "#overview").slice(1));
+}
+
+/* ---------- add remote (Korean form) ---------- */
+const ADD_BACKENDS = {
+  webdav: [
+    { k: "url", label: "URL", required: true, ph: "https://nas.example.com:5006" },
+    { k: "vendor", label: "벤더", value: "other", ph: "other / nextcloud / owncloud" },
+    { k: "user", label: "아이디" },
+    { k: "pass", label: "비밀번호", type: "password" },
+  ],
+  sftp: [
+    { k: "host", label: "호스트", required: true, ph: "nas.example.com" },
+    { k: "user", label: "아이디" },
+    { k: "pass", label: "비밀번호", type: "password" },
+    { k: "port", label: "포트", value: "22" },
+  ],
+  ftp: [
+    { k: "host", label: "호스트", required: true, ph: "ftp.example.com" },
+    { k: "user", label: "아이디" },
+    { k: "pass", label: "비밀번호", type: "password" },
+    { k: "port", label: "포트", value: "21" },
+  ],
+  s3: [
+    { k: "provider", label: "제공자", value: "Other", ph: "AWS / Minio / Other" },
+    { k: "access_key_id", label: "Access Key" },
+    { k: "secret_access_key", label: "Secret Key", type: "password" },
+    { k: "endpoint", label: "엔드포인트", ph: "https://…" },
+    { k: "region", label: "리전", ph: "us-east-1" },
+  ],
+};
+function renderAddFields() {
+  const fs = ADD_BACKENDS[$("#addType").value] || [];
+  $("#addFields").innerHTML = fs.map(f =>
+    `<div class="field"><div class="lab">${esc(f.label)}${f.required ? ' <span style="color:var(--fail)">*</span>' : ""}</div>` +
+    `<div class="ctl"><input data-pk="${esc(f.k)}" type="${f.type || "text"}" value="${esc(f.value || "")}" placeholder="${esc(f.ph || "")}" style="width:min(260px,60vw)"></div></div>`
+  ).join("");
+}
+async function addRemote() {
+  const m = $("#addMsg");
+  const name = $("#addName").value.trim();
+  const type = $("#addType").value;
+  if (!/^[A-Za-z0-9_.-]+$/.test(name)) { m.textContent = "이름은 영문/숫자/_-. 만 가능"; m.className = "msg fail"; return; }
+  const params = {};
+  document.querySelectorAll("#addFields input").forEach(i => { if (i.value !== "") params[i.dataset.pk] = i.value; });
+  for (const f of (ADD_BACKENDS[type] || [])) {
+    if (f.required && !params[f.k]) { m.textContent = f.label + " 은(는) 필수"; m.className = "msg fail"; return; }
+  }
+  const btn = $("#addBtn"); btn.disabled = true; m.textContent = "추가 중…"; m.className = "msg";
+  try {
+    const r = await api("/api/rclone-add", { method: "POST", body: JSON.stringify({ Name: name, Type: type, Params: params }) });
+    if (r.ok) { m.textContent = "✓ 추가됨: " + name; m.className = "msg ok"; $("#addName").value = ""; loadRemotes(); }
+    else { m.textContent = "✕ " + (await r.text()); m.className = "msg fail"; }
+  } catch (e) { if (String(e.message) !== "unauthorized") { m.textContent = "✕ " + e.message; m.className = "msg fail"; } }
+  btn.disabled = false;
 }
 
 /* ---------- configured remotes list ---------- */
@@ -306,6 +360,9 @@ $("#rgStart").onclick = rgStart;
 $("#rgClose").onclick = rgClose;
 $("#rgReload").onclick = rgReload;
 $("#rmRefresh").onclick = loadRemotes;
+$("#addType").onchange = renderAddFields;
+$("#addBtn").onclick = addRemote;
+renderAddFields();
 $("#backupNow").onclick = backup;
 $("#restoreBtn").onclick = restore;
 $("#rdl").onclick = downloadRestore;
