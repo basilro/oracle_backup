@@ -111,6 +111,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/rclone-add", s.requireAuth(s.handleRcloneAdd))
 	mux.HandleFunc("/api/rclone-cli", s.requireAuth(s.handleRcloneCLI))
 	mux.HandleFunc("/rclone-gui/", s.requireAuth(s.handleRcloneGUIProxy))
+	mux.HandleFunc("/ws/terminal", s.requireAuth(s.handleTerminalWS))
+	mux.HandleFunc("/vendor/", s.requireAuth(s.handleVendor))
 	mux.HandleFunc("/", s.handleRoot)
 	return mux
 }
@@ -130,6 +132,23 @@ func (s *Server) serveUI(w http.ResponseWriter, name, ctype string) {
 
 func (s *Server) staticFile(name, ctype string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) { s.serveUI(w, name, ctype) }
+}
+
+// handleVendor serves embedded third-party assets (xterm.js) under /vendor/.
+func (s *Server) handleVendor(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimPrefix(r.URL.Path, "/")
+	if !strings.HasPrefix(name, "vendor/") || strings.Contains(name, "..") {
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	ct := "application/octet-stream"
+	switch {
+	case strings.HasSuffix(name, ".js"):
+		ct = "application/javascript; charset=utf-8"
+	case strings.HasSuffix(name, ".css"):
+		ct = "text/css; charset=utf-8"
+	}
+	s.serveUI(w, name, ct)
 }
 
 // (serveUI already sets Cache-Control: no-store for all embedded assets.)

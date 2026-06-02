@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-02c";
+const BUILD = "ui-2026-06-02d";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -84,6 +84,37 @@ async function addRemote() {
     else { m.textContent = "✕ " + (await r.text()); m.className = "msg fail"; }
   } catch (e) { if (String(e.message) !== "unauthorized") { m.textContent = "✕ " + e.message; m.className = "msg fail"; } }
   btn.disabled = false;
+}
+
+/* ---------- web terminal (xterm + ws → interactive rclone config) ---------- */
+let term = null, termWs = null, fitAddon = null;
+function termOpen() {
+  if (typeof Terminal === "undefined") { alert("터미널 로딩 실패 (xterm 미로드)"); return; }
+  $("#termModal").hidden = false;
+  if (!term) {
+    term = new Terminal({ fontFamily: "IBM Plex Mono, monospace", fontSize: 13, cursorBlink: true, theme: { background: "#000000", foreground: "#d6deeb" } });
+    fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    term.open($("#termHost"));
+    term.onData(d => { if (termWs && termWs.readyState === 1) termWs.send(JSON.stringify({ type: "input", data: d })); });
+  }
+  term.clear();
+  setTimeout(() => fitAddon.fit(), 30);
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  termWs = new WebSocket(`${proto}://${location.host}/ws/terminal`);
+  termWs.binaryType = "arraybuffer";
+  termWs.onopen = () => { sendTermResize(); term.focus(); };
+  termWs.onmessage = e => term.write(typeof e.data === "string" ? e.data : new Uint8Array(e.data));
+  termWs.onclose = () => { try { term.write("\r\n\x1b[33m[연결 종료 — 닫고 다시 열 수 있습니다]\x1b[0m\r\n"); } catch (e) {} };
+  window.addEventListener("resize", onTermResize);
+}
+function sendTermResize() { if (term && termWs && termWs.readyState === 1) termWs.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows })); }
+function onTermResize() { if (!$("#termModal").hidden && fitAddon) { fitAddon.fit(); sendTermResize(); } }
+function termClose() {
+  $("#termModal").hidden = true;
+  window.removeEventListener("resize", onTermResize);
+  if (termWs) { try { termWs.close(); } catch (e) {} termWs = null; }
+  loadRemotes();
 }
 
 /* ---------- rclone CLI ---------- */
@@ -383,6 +414,8 @@ renderAddFields();
 $("#cliRun").onclick = () => cliRun();
 $("#cliInput").addEventListener("keydown", e => { if (e.key === "Enter") cliRun(); });
 $("#cliQuick").addEventListener("click", e => { const b = e.target.closest("button[data-cmd]"); if (b) cliRun(b.dataset.cmd); });
+$("#termBtn").onclick = termOpen;
+$("#termClose").onclick = termClose;
 $("#backupNow").onclick = backup;
 $("#restoreBtn").onclick = restore;
 $("#rdl").onclick = downloadRestore;
