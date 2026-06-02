@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-02d";
+const BUILD = "ui-2026-06-02e";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -99,6 +99,7 @@ function termOpen() {
     term.onData(d => { if (termWs && termWs.readyState === 1) termWs.send(JSON.stringify({ type: "input", data: d })); });
   }
   term.clear();
+  $("#termInput").value = "";
   setTimeout(() => fitAddon.fit(), 30);
   const proto = location.protocol === "https:" ? "wss" : "ws";
   termWs = new WebSocket(`${proto}://${location.host}/ws/terminal`);
@@ -107,6 +108,14 @@ function termOpen() {
   termWs.onmessage = e => term.write(typeof e.data === "string" ? e.data : new Uint8Array(e.data));
   termWs.onclose = () => { try { term.write("\r\n\x1b[33m[연결 종료 — 닫고 다시 열 수 있습니다]\x1b[0m\r\n"); } catch (e) {} };
   window.addEventListener("resize", onTermResize);
+}
+/* ff-style assist: type a line, click 전송 (or Enter) → write line + newline to the PTY */
+function termSend() {
+  if (!termWs || termWs.readyState !== 1) return;
+  const el = $("#termInput");
+  termWs.send(JSON.stringify({ type: "input", data: (el.value || "") + "\n" }));
+  el.value = "";
+  el.focus();
 }
 function sendTermResize() { if (term && termWs && termWs.readyState === 1) termWs.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows })); }
 function onTermResize() { if (!$("#termModal").hidden && fitAddon) { fitAddon.fit(); sendTermResize(); } }
@@ -416,6 +425,8 @@ $("#cliInput").addEventListener("keydown", e => { if (e.key === "Enter") cliRun(
 $("#cliQuick").addEventListener("click", e => { const b = e.target.closest("button[data-cmd]"); if (b) cliRun(b.dataset.cmd); });
 $("#termBtn").onclick = termOpen;
 $("#termClose").onclick = termClose;
+$("#termSendBtn").onclick = termSend;
+$("#termInput").addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); termSend(); } });
 $("#backupNow").onclick = backup;
 $("#restoreBtn").onclick = restore;
 $("#rdl").onclick = downloadRestore;

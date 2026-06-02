@@ -235,6 +235,11 @@ tbody tr:hover { background: rgba(255,255,255,.018); }
 .modal-head b { font-family: var(--font-display); letter-spacing: .03em; }
 .modal-head .spacer { flex: 1; }
 .modal-loading { flex: 1; display: grid; place-items: center; color: var(--muted); font-family: var(--font-mono); font-size: .9rem; text-align: center; padding: 20px; }
+/* web terminal: ff-style assist input below the xterm */
+.term-input { display: flex; gap: 8px; padding: 8px 10px; background: #000; border-top: 1px solid var(--border); }
+.term-input input { flex: 1; font-family: "IBM Plex Mono", monospace; }
+.term-input .btn-primary { padding: 9px 18px; }
+.term-hint { font-size: .72rem; padding: 0 12px 8px; background: #000; }
 #rgFrame { flex: 1; width: 100%; border: 0; background: #fff; }
 #rgFrame[hidden] { display: none; }
 

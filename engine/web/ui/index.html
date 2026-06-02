@@ -7,10 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=20260602d">
-<link rel="stylesheet" href="/vendor/xterm.css?v=20260602d">
-<script src="/vendor/xterm.js?v=20260602d"></script>
-<script src="/vendor/xterm-addon-fit.js?v=20260602d"></script>
+<link rel="stylesheet" href="/style.css?v=20260602e">
+<link rel="stylesheet" href="/vendor/xterm.css?v=20260602e">
+<script src="/vendor/xterm.js?v=20260602e"></script>
+<script src="/vendor/xterm-addon-fit.js?v=20260602e"></script>
 </head>
 <body>
 <div id="app">
@@ -142,6 +142,12 @@
         <button id="termClose" class="btn-primary">닫기</button>
       </div>
       <div id="termHost" style="flex:1;background:#000;padding:8px 10px;overflow:hidden"></div>
+      <div class="term-input">
+        <input id="termInput" type="text" autocomplete="off" spellcheck="false"
+               placeholder="답을 입력하고 전송 (예: n / y / 1 / 이름)  ·  빈칸+전송 = Enter(기본값)">
+        <button id="termSendBtn" class="btn-primary">전송</button>
+      </div>
+      <div class="term-hint dim">입력칸은 보조용입니다. 터미널을 직접 클릭해 타이핑해도 됩니다. 전송하면 줄 끝에 Enter가 자동으로 들어갑니다.</div>
     </div>
   </div>
 
@@ -159,6 +165,6 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=20260602d"></script>
+<script src="/app.js?v=20260602e"></script>
 </body>
 </html>
