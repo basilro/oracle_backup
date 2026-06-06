@@ -41,16 +41,19 @@ engine 컨테이너 (docker.sock + /home:ro 마운트, 웹 UI :8088)
 ## 2. 새 서버 이식 (처음부터)
 
 ```bash
-git clone <repo> backup-stack && cd backup-stack
+git clone https://github.com/basilro/oracle_backup.git backup-stack && cd backup-stack
 cp .env.example .env
 mkdir -p secrets rclone config
 
-# 1) 이미지 빌드 (rclone 내장)
+# 1) 이미지 준비 (rclone 내장)
+#    (A) Docker Hub에서 받기 — arm64/amd64 멀티아치, 빌드 불필요 (권장)
+docker compose pull
+#    (B) 또는 직접 빌드
 docker compose build
 
 # 2) rclone 목적지 설정 — 이 스택의 내장 rclone 으로 바로 (별도 설치 불필요)
 #    rclone.conf 가 없는 새 서버라면 여기서 만든다. 만든 remote 이름을 기억.
-docker run --rm -it -v "$PWD/rclone:/etc/rclone" backupstack-engine:local rclone-config
+docker run --rm -it -v "$PWD/rclone:/etc/rclone" bcjang/cloud_backup:v1.0.0 rclone-config
 #    (이미 다른 곳의 rclone.conf 가 있으면: cp <인증된 rclone.conf> rclone/rclone.conf 로 대체 가능)
 #    Google Drive 등 OAuth 는 브라우저 있는 PC에서 `rclone authorize "drive"` 토큰을 붙여넣는다 (§2.5)
 
@@ -63,7 +66,7 @@ openssl rand -base64 48 > secrets/repo-pass            # 신규 저장소면 새
 chmod -R go-rwx secrets
 
 # 5) 연결 점검 → (신규 저장소만) 초기화 → 기동
-docker run --rm -v "$PWD/rclone:/etc/rclone" backupstack-engine:local rclone lsd <REMOTE_NAME>:   # Drive 접근 확인
+docker run --rm -v "$PWD/rclone:/etc/rclone" bcjang/cloud_backup:v1.0.0 rclone lsd <REMOTE_NAME>:   # Drive 접근 확인
 # 신규 저장소: .env 에서 ALLOW_REPO_INIT=true 후
 #   docker compose run --rm engine init      ; 다시 false 로 되돌림
 docker compose up -d
@@ -76,7 +79,7 @@ docker compose up -d
 > - `HOST_TAG` == 저장소 하위 경로(`backups/<HOST_TAG>`). 기존 저장소 재사용 시 그 이름과 일치시킬 것.
 > - `repo-pass` 는 **반드시 비밀번호 관리자에 별도 보관**. 분실 시 백업 복구 영구 불가.
 > - `/state`, `backupstack_logs` 볼륨은 **서버별 고유** — 서버 간 복사 금지.
-> - x86_64 서버는 `engine/Dockerfile` 의 `TARGETARCH` 기본값(arm64)을 amd64로 빌드(`docker buildx`/`--build-arg TARGETARCH=amd64`).
+> - 공개 이미지 `bcjang/cloud_backup` 는 **arm64·amd64 멀티아치**라 `docker compose pull` 이 양쪽에서 그대로 동작. 직접 빌드해도 `docker compose build` 가 호스트 아키텍처를 자동 감지.
 
 ---
 
@@ -88,18 +91,18 @@ docker compose up -d
 이 스택 이미지에 들어있는 rclone 으로 대화식 설정. `./rclone/rclone.conf` 에 바로 기록된다.
 (이미지가 필요하므로 먼저 `docker compose build`.)
 ```bash
-docker run --rm -it -v "$PWD/rclone:/etc/rclone" backupstack-engine:local rclone-config
+docker run --rm -it -v "$PWD/rclone:/etc/rclone" bcjang/cloud_backup:v1.0.0 rclone-config
 #  n) New remote → 이름 입력(이게 REMOTE_NAME) → 백엔드 선택 → 안내대로 진행
 #  Google Drive 등 OAuth: 브라우저가 없으면 rclone이 다른 PC에서 실행할
 #  `rclone authorize "drive"` 명령을 출력 → 그 PC에서 실행 후 토큰을 붙여넣기
-#  설정 확인: docker run --rm -v "$PWD/rclone:/etc/rclone" backupstack-engine:local rclone listremotes
+#  설정 확인: docker run --rm -v "$PWD/rclone:/etc/rclone" bcjang/cloud_backup:v1.0.0 rclone listremotes
 # (공식 rclone 이미지를 선호하면: docker run --rm -it -v "$PWD/rclone:/config/rclone" rclone/rclone:1.66 config)
 ```
 
 ### 방법 B — 비대화식 한 줄 생성 (WebDAV/Synology/FTP/SFTP 등 비-OAuth)
 비밀번호는 rclone이 자동 obscure 한다.
 ```bash
-R="docker run --rm -v $PWD/rclone:/etc/rclone backupstack-engine:local rclone config create"
+R="docker run --rm -v $PWD/rclone:/etc/rclone bcjang/cloud_backup:v1.0.0 rclone config create"
 
 # WebDAV (Nextcloud 등)
 $R mydav webdav url=https://dav.example.com/remote.php/dav vendor=nextcloud user=USER pass=PASS
@@ -120,7 +123,7 @@ $R mysftp sftp host=ssh.example.com user=USER pass=PASS port=22
 ### 설정 후
 ```bash
 # 1) 연결 확인 (remote 이름으로 최상위 목록이 보이면 성공)
-docker run --rm -v "$PWD/rclone:/etc/rclone" backupstack-engine:local rclone lsd <REMOTE_NAME>:
+docker run --rm -v "$PWD/rclone:/etc/rclone" bcjang/cloud_backup:v1.0.0 rclone lsd <REMOTE_NAME>:
 # 2) .env 의 REMOTE_NAME 을 그 섹션 이름으로 설정
 # 3) 새 저장소면: ALLOW_REPO_INIT=true → docker compose run --rm engine init → 다시 false
 # 4) docker compose up -d   (엔진은 rclone.conf 를 ro 로 읽어 restic 백엔드로 사용)
