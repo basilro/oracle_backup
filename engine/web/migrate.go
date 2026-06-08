@@ -206,14 +206,17 @@ func preflightDecision(from, to string, toExists, connected bool) error {
 
 // MigrationStatus is the polled state of an in-flight (or last) migration.
 type MigrationStatus struct {
-	Active  bool   `json:"active"`
-	Phase   string `json:"phase"` // idle|preflight|copy|verify|switch|cleanup|done|failed
-	From    string `json:"from"`
-	To      string `json:"to"`
-	Stats   string `json:"stats"`
-	Error   string `json:"error"`
-	Started int64  `json:"started"`
-	Updated int64  `json:"updated"`
+	Active     bool   `json:"active"`
+	Phase      string `json:"phase"` // idle|preflight|copy|verify|switch|cleanup|done|failed
+	Mode       string `json:"mode"`  // move|adopt
+	FromRemote string `json:"fromRemote"`
+	From       string `json:"from"`
+	ToRemote   string `json:"toRemote"`
+	To         string `json:"to"`
+	Stats      string `json:"stats"`
+	Error      string `json:"error"`
+	Started    int64  `json:"started"`
+	Updated    int64  `json:"updated"`
 }
 
 type Migrator struct {
@@ -258,6 +261,14 @@ func (m *Migrator) setStats(line string) {
 	}
 	m.mu.Lock()
 	m.status.Stats = line
+	m.status.Updated = time.Now().Unix()
+	m.persistLocked()
+	m.mu.Unlock()
+}
+
+func (m *Migrator) setMode(mode string) {
+	m.mu.Lock()
+	m.status.Mode = mode
 	m.status.Updated = time.Now().Unix()
 	m.persistLocked()
 	m.mu.Unlock()
@@ -321,10 +332,23 @@ func (m *Migrator) rclonePurge(ctx context.Context, target string) error {
 }
 
 // Start validates, acquires the gate, and launches the migration goroutine.
-func (m *Migrator) Start(appCtx context.Context, to string) error {
-	to = strings.Trim(strings.TrimSpace(to), "/")
-	if !validRemotePath(to) {
+// An empty toRemote means "keep the current remote" (path-only change).
+func (m *Migrator) Start(appCtx context.Context, toRemote, toPath string) error {
+	toRemote = strings.TrimSpace(toRemote)
+	if toRemote == "" {
+		toRemote = activeRemote()
+	}
+	toPath = strings.Trim(strings.TrimSpace(toPath), "/")
+	if !validRemotePath(toPath) {
 		return fmt.Errorf("잘못된 경로")
+	}
+	if !validRemoteName(toRemote) {
+		return fmt.Errorf("설정되지 않은 원격: %s", toRemote)
+	}
+	fromRemote := activeRemote()
+	fromPath := currentRepoPath()
+	if toRemote == fromRemote && toPath == fromPath {
+		return fmt.Errorf("현재 위치와 동일합니다")
 	}
 	m.mu.Lock()
 	if m.status.Active {
@@ -335,38 +359,40 @@ func (m *Migrator) Start(appCtx context.Context, to string) error {
 	if !m.runner.AcquireForMaintenance() {
 		return fmt.Errorf("백업/복원이 실행 중입니다")
 	}
-	from := currentRepoPath()
 	now := time.Now().Unix()
 	m.mu.Lock()
-	m.status = MigrationStatus{Active: true, Phase: "preflight", From: from, To: to, Started: now, Updated: now}
+	m.status = MigrationStatus{Active: true, Phase: "preflight",
+		FromRemote: fromRemote, From: fromPath, ToRemote: toRemote, To: toPath,
+		Started: now, Updated: now}
 	m.persistLocked()
 	m.mu.Unlock()
 	go func() {
 		defer m.runner.ReleaseMaintenance()
-		m.run(appCtx, from, to)
+		m.run(appCtx, fromRemote, fromPath, toRemote, toPath)
 	}()
 	return nil
 }
 
 // run executes the migration state machine. Invariant: never switch the active
-// path or delete the source before copy+verify succeed.
-func (m *Migrator) run(ctx context.Context, from, to string) {
-	remote := activeRemote()
-	src := remote + ":" + from
-	dst := remote + ":" + to
-	fromRepo := repoURL(from)
-	toRepo := repoURL(to)
+// remote/path or delete the source before copy+verify succeed.
+func (m *Migrator) run(ctx context.Context, fromRemote, fromPath, toRemote, toPath string) {
+	src := fromRemote + ":" + fromPath
+	dst := toRemote + ":" + toPath
+	fromRepo := repoURLOn(fromRemote, fromPath)
+	toRepo := repoURLOn(toRemote, toPath)
 
 	m.setPhase("preflight")
-	connected := remoteConnected(ctx)
+	connected := remoteConnectedOn(ctx, toRemote)
 	toExists := repoExists(ctx, toRepo)
-	if err := preflightDecision(from, to, toExists, connected); err != nil {
+	mode, err := migrateMode(connected, toExists)
+	if err != nil {
 		m.fail("%v", err)
 		return
 	}
-	oldHasData := repoExists(ctx, fromRepo)
+	m.setMode(mode)
 
-	if oldHasData {
+	copied := false
+	if mode == "move" && repoExists(ctx, fromRepo) {
 		oldCount, _ := snapshotCount(ctx, fromRepo)
 		m.setPhase("copy")
 		if err := m.rcloneCopy(ctx, src, dst); err != nil {
@@ -387,16 +413,22 @@ func (m *Migrator) run(ctx context.Context, from, to string) {
 			m.fail("검증 실패: 스냅샷 개수 불일치 (원본 %d, 사본 %d)", oldCount, newCount)
 			return
 		}
+		copied = true
 	}
 
 	m.setPhase("switch")
-	if err := writeRemotePath(to); err != nil {
+	if err := writeRemoteName(toRemote); err != nil {
+		m.fail("원격 전환 실패: %v", err)
+		return
+	}
+	if err := writeRemotePath(toPath); err != nil {
 		m.fail("경로 전환 실패: %v", err)
 		return
 	}
+	os.Setenv("REMOTE_NAME", toRemote)
 	os.Setenv("RESTIC_REPOSITORY", toRepo)
 
-	if oldHasData {
+	if copied {
 		m.setPhase("cleanup")
 		if err := m.rclonePurge(ctx, src); err != nil {
 			m.mu.Lock()
@@ -406,6 +438,25 @@ func (m *Migrator) run(ctx context.Context, from, to string) {
 		}
 	}
 	m.setPhase("done")
+}
+
+// handleRemoteTarget (GET ?remote=&path=): preview a candidate destination —
+// is it reachable, and does it already hold a repo? Drives the move/adopt notice.
+func (s *Server) handleRemoteTarget(w http.ResponseWriter, r *http.Request) {
+	remote := strings.TrimSpace(r.URL.Query().Get("remote"))
+	if remote == "" {
+		remote = activeRemote()
+	}
+	path := strings.Trim(strings.TrimSpace(r.URL.Query().Get("path")), "/")
+	if !validRemoteName(remote) || (path != "" && !validRemotePath(path)) {
+		http.Error(w, "bad params", 400)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	reachable := remoteConnectedOn(ctx, remote)
+	hasRepo := reachable && repoExists(ctx, repoURLOn(remote, path))
+	s.writeJSON(w, 200, map[string]any{"reachable": reachable, "hasRepo": hasRepo})
 }
 
 // handleRemoteMigrate: GET → status poll; POST → start (CSRF + password re-auth +
@@ -424,7 +475,7 @@ func (s *Server) handleRemoteMigrate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, _ := s.currentUser(r)
-	var body struct{ Path, Password, Confirm string }
+	var body struct{ Remote, Path, Password, Confirm string }
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		http.Error(w, "bad", 400)
 		return
@@ -439,11 +490,15 @@ func (s *Server) handleRemoteMigrate(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "password re-auth failed", 401)
 		return
 	}
+	if body.Remote != "" && !validRemoteName(strings.TrimSpace(body.Remote)) {
+		http.Error(w, "invalid remote", 400)
+		return
+	}
 	if !validRemotePath(strings.Trim(strings.TrimSpace(body.Path), "/")) {
 		http.Error(w, "invalid path", 400)
 		return
 	}
-	if err := s.migrator.Start(s.appCtx, body.Path); err != nil {
+	if err := s.migrator.Start(s.appCtx, body.Remote, body.Path); err != nil {
 		s.store.Audit(user, "remote-migrate", "start-fail")
 		s.writeJSON(w, 409, map[string]string{"error": err.Error()})
 		return
