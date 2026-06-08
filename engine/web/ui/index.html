@@ -96,6 +96,16 @@
       </div>
 
       <div class="card">
+        <h2>백업 저장 위치 (원격 경로)</h2>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem">현재 원격(<code id="rpRemote">—</code>) 안에서 저장소가 위치한 경로입니다. 변경하면 기존 백업 데이터를 새 경로로 <b>이동</b>(복사→검증→전환→원본 삭제)합니다. <b>원격이 연결된 상태에서만</b> 변경할 수 있습니다.</p>
+        <div class="field"><div class="lab">현재 경로</div><div class="ctl"><code id="rpPath" class="mono">—</code> <span id="rpConn" class="st" style="margin-left:8px"></span></div></div>
+        <div class="row-actions" style="margin-top:6px">
+          <button id="rpChange" class="btn-primary" disabled>경로 변경…</button>
+          <span id="rpMsg" class="msg"></span>
+        </div>
+      </div>
+
+      <div class="card">
         <h2>rclone CLI (명령 실행)</h2>
         <p class="dim" style="margin:0 0 12px;font-size:.86rem">한 줄(one-shot) 실행입니다. 조회: <code>listremotes</code> · <code>lsd gdrive:</code> · <code>about gdrive:</code>. 설정은 <b>대화형 마법사 대신 한 줄 명령</b>으로: <code>config create 이름 webdav url=… user=… pass=…</code> · <code>config update</code> · <code>config delete 이름</code> · <code>config show</code> · <code>config redacted</code>. <span style="color:var(--fail)">대화형 <code>config</code>(단계 선택식)·삭제/전송류는 불가</span> — 그건 위 "목적지 추가" 폼이나 "rclone 설정 열기"(GUI)를 쓰세요.</p>
         <div class="cli-row">
@@ -163,6 +173,50 @@
       <div class="br-crumb" id="brCrumb"></div>
       <div class="br-list" id="brList"></div>
       <div class="br-sel" id="brSel"></div>
+    </div>
+  </div>
+
+  <div id="remoteModal" class="modal" hidden>
+    <div class="modal-box" style="height:min(80vh,760px)">
+      <div class="modal-head">
+        <b>백업 저장 위치 변경</b>
+        <span class="dim" id="rmRemoteLbl" style="font-size:.8rem"></span>
+        <span class="spacer"></span>
+        <button id="rmCancel" class="btn-ghost">취소</button>
+      </div>
+
+      <div id="rmBrowse">
+        <div class="br-crumb" id="rmCrumb"></div>
+        <div class="br-list" id="rmList"></div>
+        <div class="rm-bar">
+          <input id="rmNewName" type="text" placeholder="새 폴더 이름(선택)" spellcheck="false" autocomplete="off">
+          <button id="rmMkPath" class="btn-ghost">하위 경로로 추가</button>
+          <span class="spacer"></span>
+          <span class="dim" style="font-size:.82rem">대상:</span>
+          <code id="rmTarget" class="mono">—</code>
+          <button id="rmNext" class="btn-primary">이 위치로 변경</button>
+        </div>
+      </div>
+
+      <div id="rmConfirmStep" hidden>
+        <div class="rm-confirm">
+          <p>현재 <code id="rmcFrom" class="mono"></code> → <code id="rmcTo" class="mono"></code> 로 이동합니다.</p>
+          <p class="dim" style="font-size:.85rem">복사·검증 후 원본은 삭제됩니다. 진행하려면 관리자 비밀번호와 <code>MIGRATE</code>를 입력하세요.</p>
+          <div class="field"><div class="lab">관리자 비밀번호</div><div class="ctl"><input id="rmcPass" type="password" placeholder="••••••••" style="width:180px"></div></div>
+          <div class="field"><div class="lab">확인 문구<small>대문자 MIGRATE</small></div><div class="ctl"><input id="rmcPhrase" type="text" placeholder="MIGRATE" autocomplete="off" style="width:180px"></div></div>
+          <div class="row-actions"><button id="rmcBack" class="btn-ghost">뒤로</button><button id="rmcStart" class="btn-primary">이동 시작</button><span id="rmcMsg" class="msg"></span></div>
+        </div>
+      </div>
+
+      <div id="rmProgress" hidden>
+        <div class="mp">
+          <div class="mp-phase" id="mpPhase">준비 중…</div>
+          <div class="mp-bar"><div class="mp-fill" id="mpFill"></div></div>
+          <pre class="mp-stats" id="mpStats"></pre>
+          <div class="mp-err" id="mpErr" hidden></div>
+          <div class="row-actions"><button id="mpClose" class="btn-primary" hidden>닫기</button></div>
+        </div>
+      </div>
     </div>
   </div>
 
