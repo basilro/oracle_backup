@@ -349,3 +349,47 @@ func (m *Migrator) run(ctx context.Context, from, to string) {
 	}
 	m.setPhase("done")
 }
+
+// handleRemoteMigrate: GET → status poll; POST → start (CSRF + password re-auth +
+// "MIGRATE" confirmation). Dangerous: moves data and deletes the old copy.
+func (s *Server) handleRemoteMigrate(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet {
+		s.writeJSON(w, 200, s.migrator.Snapshot())
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "method", 405)
+		return
+	}
+	if !s.checkCSRF(r) {
+		http.Error(w, "csrf", 403)
+		return
+	}
+	user, _ := s.currentUser(r)
+	var body struct{ Path, Password, Confirm string }
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "bad", 400)
+		return
+	}
+	if body.Confirm != "MIGRATE" {
+		http.Error(w, "confirmation phrase required", 400)
+		return
+	}
+	if !checkPassword(s.adminHash, body.Password) {
+		time.Sleep(time.Second)
+		s.store.Audit(user, "remote-migrate", "reauth-fail")
+		http.Error(w, "password re-auth failed", 401)
+		return
+	}
+	if !validRemotePath(strings.Trim(strings.TrimSpace(body.Path), "/")) {
+		http.Error(w, "invalid path", 400)
+		return
+	}
+	if err := s.migrator.Start(s.appCtx, body.Path); err != nil {
+		s.store.Audit(user, "remote-migrate", "start-fail")
+		s.writeJSON(w, 409, map[string]string{"error": err.Error()})
+		return
+	}
+	s.store.Audit(user, "remote-migrate", "started")
+	s.writeJSON(w, 200, s.migrator.Snapshot())
+}

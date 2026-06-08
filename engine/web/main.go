@@ -165,6 +165,7 @@ func main() {
 		store: store, runner: runner, cfgPath: cfgPath, logDir: "/var/log/backup",
 		sessionKey: loadSessionKey(), adminUser: adminUser, adminHash: adminHash,
 		restoreRoot: "/restore-out", appCtx: appCtx,
+		migrator: NewMigrator(runner),
 	}
 
 	var c *cron.Cron = cron.New(cron.WithLocation(time.Local))
