@@ -26,7 +26,11 @@ acquire_lock() {
 record_success() { date -u +%FT%TZ > "$STATE_DIR/last-success"; rm -f "$STATE_DIR/last-failure"; }
 record_failure() { date -u +%FT%TZ > "$STATE_DIR/last-failure"; echo "$1" >> "$STATE_DIR/last-failure"; }
 
-webhook_url() { if [ -f /secrets/discord-webhook ]; then cat /secrets/discord-webhook; else echo "${BACKUP_ALERT_WEBHOOK:-}"; fi; }
+webhook_url() {
+    if   [ -s /secrets/discord-webhook ]; then cat /secrets/discord-webhook
+    elif [ -s /config/alert-webhook   ]; then cat /config/alert-webhook
+    else echo "${BACKUP_ALERT_WEBHOOK:-}"; fi
+}
 
 notify() {  # $1=category(ok|fail) $2=message  (자격증명/경로 미포함, 일반 카테고리만)
     local url; url=$(webhook_url); [ -n "$url" ] || return 0
