@@ -15,6 +15,7 @@ import (
 )
 
 const (
+	remoteNameFile      = "/config/remote-name"
 	remotePathFile      = "/config/remote-path"
 	migrationStatusFile = "/state/migration-status.json"
 )
@@ -39,8 +40,11 @@ func currentRepoPathFrom(file string) string {
 	return defaultRepoPath()
 }
 
-// repoURL builds the full restic repo URL (rclone backend) for a subpath.
-func repoURL(path string) string { return "rclone:" + activeRemote() + ":" + path }
+// repoURLOn builds the full restic repo URL for an explicit remote + subpath.
+func repoURLOn(remote, path string) string { return "rclone:" + remote + ":" + path }
+
+// repoURL builds the repo URL for the active remote + subpath.
+func repoURL(path string) string { return repoURLOn(activeRemote(), path) }
 
 // validRemotePath validates a user-chosen rclone destination subpath. Rejects
 // empty, leading "/" or "-", ".." traversal, control chars, and shell/rclone
@@ -74,12 +78,66 @@ func writeRemotePath(path string) error {
 	return os.Rename(tmp, remotePathFile)
 }
 
-// remoteConnected reports whether the active remote answers a shallow listing.
-func remoteConnected(ctx context.Context) bool {
+// writeRemoteName atomically persists the active remote name (read by entrypoint).
+func writeRemoteName(name string) error {
+	tmp := remoteNameFile + ".tmp"
+	if err := os.WriteFile(tmp, []byte(name+"\n"), 0644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, remoteNameFile)
+}
+
+// configuredRemoteNames parses rclone.conf section headers → remote names.
+func configuredRemoteNames() []string {
+	var names []string
+	b, err := os.ReadFile(os.Getenv("RCLONE_CONFIG"))
+	if err != nil {
+		return names
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "[") && strings.HasSuffix(t, "]") {
+			names = append(names, strings.TrimSpace(t[1:len(t)-1]))
+		}
+	}
+	return names
+}
+
+// remoteNameIn reports membership (pure, testable seam).
+func remoteNameIn(name string, list []string) bool {
+	for _, n := range list {
+		if n == name {
+			return true
+		}
+	}
+	return false
+}
+
+// validRemoteName accepts only a non-empty name configured in rclone.conf.
+func validRemoteName(name string) bool {
+	return name != "" && remoteNameIn(name, configuredRemoteNames())
+}
+
+// migrateMode decides move vs adopt from target reachability + repo presence.
+func migrateMode(toReachable, toHasRepo bool) (string, error) {
+	if !toReachable {
+		return "", fmt.Errorf("대상 원격에 연결할 수 없습니다")
+	}
+	if toHasRepo {
+		return "adopt", nil
+	}
+	return "move", nil
+}
+
+// remoteConnectedOn reports whether the given remote answers a shallow listing.
+func remoteConnectedOn(ctx context.Context, remote string) bool {
 	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
 	defer cancel()
-	return exec.CommandContext(cctx, "rclone", "lsd", activeRemote()+":", "--max-depth", "1").Run() == nil
+	return exec.CommandContext(cctx, "rclone", "lsd", remote+":", "--max-depth", "1").Run() == nil
 }
+
+// remoteConnected reports whether the active remote is reachable.
+func remoteConnected(ctx context.Context) bool { return remoteConnectedOn(ctx, activeRemote()) }
 
 // handleRemotePath (GET): current remote + active subpath + connectivity.
 func (s *Server) handleRemotePath(w http.ResponseWriter, r *http.Request) {

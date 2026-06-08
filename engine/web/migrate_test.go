@@ -57,6 +57,37 @@ func TestPreflightDecision(t *testing.T) {
 	}
 }
 
+func TestRemoteNameIn(t *testing.T) {
+	list := []string{"gdrive", "onedrive"}
+	if !remoteNameIn("gdrive", list) {
+		t.Error("gdrive should be in list")
+	}
+	if remoteNameIn("dropbox", list) {
+		t.Error("dropbox should not be in list")
+	}
+	if remoteNameIn("", list) {
+		t.Error("empty should not be in list")
+	}
+}
+
+func TestMigrateMode(t *testing.T) {
+	if _, err := migrateMode(false, false); err == nil {
+		t.Error("unreachable must error")
+	}
+	if m, _ := migrateMode(true, true); m != "adopt" {
+		t.Errorf("hasRepo→adopt, got %q", m)
+	}
+	if m, _ := migrateMode(true, false); m != "move" {
+		t.Errorf("empty→move, got %q", m)
+	}
+}
+
+func TestRepoURLOn(t *testing.T) {
+	if got := repoURLOn("onedrive", "backups/h"); got != "rclone:onedrive:backups/h" {
+		t.Errorf("repoURLOn = %q", got)
+	}
+}
+
 func remotePathFileTest(t *testing.T) string {
 	return t.TempDir() + "/remote-path"
 }

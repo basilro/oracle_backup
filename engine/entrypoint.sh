@@ -21,12 +21,18 @@ esac
 [ -f /config/excludes.txt ] || cp /opt/backup/excludes.txt.example /config/excludes.txt
 
 # 단일 컨테이너: restic이 rclone을 stdio로 직접 실행. 자격증명은 rclone.conf(ro)에만.
-# 저장소 하위 경로: 런타임에 UI로 변경 가능(/config/remote-path). 없으면 기본값(하위호환).
+# 활성 원격·하위 경로: 런타임에 UI로 변경 가능(/config/remote-name, /config/remote-path).
+# 없으면 기본값(하위호환). REMOTE_NAME을 재export 해 엔진(os.Getenv)·UI가 오버라이드를 본다.
+REMOTE="${REMOTE_NAME:?set REMOTE_NAME}"
+if [ -s /config/remote-name ]; then
+    REMOTE="$(head -n1 /config/remote-name | tr -d '[:space:]')"
+fi
 REPO_PATH="backups/${HOST_TAG:?set HOST_TAG}"
 if [ -s /config/remote-path ]; then
     REPO_PATH="$(head -n1 /config/remote-path | tr -d '[:space:]')"
 fi
-export RESTIC_REPOSITORY="rclone:${REMOTE_NAME:?set REMOTE_NAME}:${REPO_PATH}"
+export REMOTE_NAME="$REMOTE"
+export RESTIC_REPOSITORY="rclone:${REMOTE}:${REPO_PATH}"
 export RESTIC_PASSWORD_FILE="/secrets/repo-pass"
 echo "[entrypoint] repo=${RESTIC_REPOSITORY}  rclone_config=${RCLONE_CONFIG}  init=${ALLOW_REPO_INIT:-false}"
 
