@@ -105,6 +105,22 @@ func NewRunner(store *Store, scripts, logDir string) *Runner {
 	return &Runner{store: store, scripts: scripts, logDir: logDir}
 }
 
+// AcquireForMaintenance grabs the run gate for a non-backup maintenance task
+// (e.g. repo migration), marking the runner busy. Returns false if already busy.
+func (r *Runner) AcquireForMaintenance() bool {
+	if !r.gate.TryLock() {
+		return false
+	}
+	r.running.Store(true)
+	return true
+}
+
+// ReleaseMaintenance releases the gate acquired by AcquireForMaintenance.
+func (r *Runner) ReleaseMaintenance() {
+	r.running.Store(false)
+	r.gate.Unlock()
+}
+
 // Busy reports whether a run is in progress without ever blocking.
 func (r *Runner) Busy() bool { return r.running.Load() }
 
