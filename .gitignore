@@ -5,6 +5,7 @@
 /config/excludes.txt
 /restore-out/
 engine/web/backup-engine
+engine/web/backupengine
 *.db
 *.db-wal
 *.db-shm
