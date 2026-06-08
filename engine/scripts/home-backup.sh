@@ -35,7 +35,7 @@ restic_unlock_stale
 
 # 여유 공간 (staging)
 FREE_MB=$(df -Pm "$STAGING_ROOT" | awk 'NR==2{print $4}')
-[ "${FREE_MB:-0}" -ge "${DB_DUMP_MIN_FREE_MB:-5000}" ] || { notify fail "low disk ${FREE_MB}MB"; die "low free space ${FREE_MB}MB"; }
+[ "${FREE_MB:-0}" -ge "${DB_DUMP_MIN_FREE_MB:-5000}" ] || { notify fail "디스크 공간 부족 ${FREE_MB}MB"; die "low free space ${FREE_MB}MB"; }
 
 # Phase1: DB 덤프
 if [ "${DB_BACKUP_ENABLED:-true}" = "true" ]; then
@@ -53,4 +53,4 @@ log "--- Phase3 forget+prune ---"; restic_forget
 
 ELAPSED=$(( $(date +%s) - START ))
 log "=== backup OK in ${ELAPSED}s ==="
-record_success; notify ok "completed in ${ELAPSED}s"
+record_success; notify ok "백업 완료 (${ELAPSED}초)"

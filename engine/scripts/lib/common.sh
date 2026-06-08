@@ -28,12 +28,13 @@ record_failure() { date -u +%FT%TZ > "$STATE_DIR/last-failure"; echo "$1" >> "$S
 
 webhook_url() { if [ -f /secrets/discord-webhook ]; then cat /secrets/discord-webhook; else echo "${BACKUP_ALERT_WEBHOOK:-}"; fi; }
 
-notify() {  # $1=category $2=message  (자격증명/경로 미포함, 일반 카테고리만)
+notify() {  # $1=category(ok|fail) $2=message  (자격증명/경로 미포함, 일반 카테고리만)
     local url; url=$(webhook_url); [ -n "$url" ] || return 0
+    local label; case "$1" in ok) label="성공";; fail) label="실패";; *) label="$1";; esac
     # Discord webhooks require "content"; Slack-compat ignores extra keys.
     curl -fsS -X POST -H 'Content-Type: application/json' \
-        -d "$(printf '{"content":"[backup:%s] %s on %s","text":"[backup:%s] %s"}' "$1" "$2" "${HOST_TAG:-$(hostname)}" "$1" "$2")" \
-        "$url" >/dev/null 2>&1 || warn "webhook notify failed"
+        -d "$(printf '{"content":"[백업:%s] %s (호스트: %s)","text":"[백업:%s] %s"}' "$label" "$2" "${HOST_TAG:-$(hostname)}" "$label" "$2")" \
+        "$url" >/dev/null 2>&1 || warn "webhook 알림 전송 실패"
 }
 
 # on_error: $1=line, $2=exit code (passed explicitly so a cleanup step in the
@@ -41,7 +42,7 @@ notify() {  # $1=category $2=message  (자격증명/경로 미포함, 일반 카
 on_error() {
     local ln="${1:-?}" ec="${2:-$?}"
     record_failure "exit=$ec line=$ln"
-    notify fail "run failed (exit=$ec)"
+    notify fail "실행 실패 (종료코드=$ec, 줄=$ln)"
     exit "$ec"
 }
 install_error_trap() { trap 'on_error "$LINENO" "$?"' ERR; set -Eeuo pipefail; }

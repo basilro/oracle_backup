@@ -12,4 +12,4 @@ restic_ensure_repo
 restic_check "${CHECK_SUBSET:-5%}"
 ELAPSED=$(( $(date +%s) - START ))
 log "=== check OK in ${ELAPSED}s ==="
-notify ok "integrity check passed in ${ELAPSED}s"
+notify ok "무결성 검사 통과 (${ELAPSED}초)"
