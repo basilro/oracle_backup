@@ -81,7 +81,7 @@
 
       <div class="card">
         <h2>rclone 공식 설정 · 설정된 목적지</h2>
-        <p class="dim" style="margin:0 0 12px;font-size:.86rem"><b>Google Drive 등 OAuth</b>나 세밀한 편집은 rclone 공식 설정 화면(이 창 안 모달, 영어)에서 합니다. 추가/변경한 remote는 <b>즉시 사용 가능</b>(엔진 재시작 불필요), 활성 목적지 변경은 <code>.env</code>의 <code>REMOTE_NAME</code> 수정 후 재시작. <span class="dim">별도 포트 노출 없이 대시보드를 통해 안전하게 연결됩니다.</span></p>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem"><b>Google Drive 등 OAuth</b>나 세밀한 편집은 rclone 공식 설정 화면(이 창 안 모달, 영어)에서 합니다. 추가/변경한 remote는 <b>즉시 사용 가능</b>(엔진 재시작 불필요), 활성 목적지(원격) 변경은 아래 "백업 저장 위치" 카드의 <b>원격 전환</b>으로(재시작 불필요). <span class="dim">별도 포트 노출 없이 대시보드를 통해 안전하게 연결됩니다.</span></p>
         <div class="row-actions" style="margin:0">
           <button id="rgStart" class="btn-primary">rclone 설정 열기</button>
           <span id="rgMsg" class="msg"></span>
@@ -103,6 +103,7 @@
           <button id="rpChange" class="btn-primary" disabled>경로 변경…</button>
           <span id="rpMsg" class="msg"></span>
         </div>
+        <div class="field" style="margin-top:14px;border-top:1px solid var(--border-soft);padding-top:14px"><div class="lab">원격 전환<small>다른 목적지로 전환 · 경로는 현재 유지</small></div><div class="ctl"><select id="remoteSel" style="min-width:160px"></select><button id="remoteSwitchBtn" class="btn-ghost" style="margin-left:8px" disabled>원격 전환…</button></div></div>
       </div>
 
       <div class="card">
@@ -200,8 +201,9 @@
 
       <div id="rmConfirmStep" hidden>
         <div class="rm-confirm">
-          <p>현재 <code id="rmcFrom" class="mono"></code> → <code id="rmcTo" class="mono"></code> 로 이동합니다.</p>
-          <p class="dim" style="font-size:.85rem">복사·검증 후 원본은 삭제됩니다. 진행하려면 관리자 비밀번호와 <code>MIGRATE</code>를 입력하세요.</p>
+          <p>현재 <code id="rmcFrom" class="mono"></code> → <code id="rmcTo" class="mono"></code></p>
+          <p id="rmcMode" class="dim" style="font-size:.85rem"></p>
+          <p class="dim" style="font-size:.85rem">진행하려면 관리자 비밀번호와 <code>MIGRATE</code>를 입력하세요.</p>
           <div class="field"><div class="lab">관리자 비밀번호</div><div class="ctl"><input id="rmcPass" type="password" placeholder="••••••••" style="width:180px"></div></div>
           <div class="field"><div class="lab">확인 문구<small>대문자 MIGRATE</small></div><div class="ctl"><input id="rmcPhrase" type="text" placeholder="MIGRATE" autocomplete="off" style="width:180px"></div></div>
           <div class="row-actions"><button id="rmcBack" class="btn-ghost">뒤로</button><button id="rmcStart" class="btn-primary">이동 시작</button><span id="rmcMsg" class="msg"></span></div>

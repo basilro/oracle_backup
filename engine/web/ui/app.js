@@ -498,13 +498,24 @@ $("#brSel").addEventListener("click", e => {
 });
 
 /* ---------- remote repo path change + migration ---------- */
-let rmPath = "", rmTarget = "", rmPoll = null;
+let rmPath = "", rmTarget = "", rmPoll = null, rpCurRemote = "";
 const MP_PHASES = { preflight: ["사전 점검", 10], copy: ["복사 중", 45], verify: ["검증 중", 75], switch: ["경로 전환", 90], cleanup: ["원본 정리", 96], done: ["완료", 100], failed: ["실패", 100] };
+async function loadRemoteSelect() {
+  const sel = $("#remoteSel"); if (!sel) return;
+  try {
+    const rs = await (await api("/api/rclone-remotes")).json();
+    const list = Array.isArray(rs) ? rs : [];
+    sel.innerHTML = list.map(x => `<option value="${esc(x.name)}"${x.name === rpCurRemote ? " selected" : ""}>${esc(x.name)}${x.name === rpCurRemote ? " (현재)" : ""}</option>`).join("");
+    $("#remoteSwitchBtn").disabled = list.filter(x => x.name !== rpCurRemote).length === 0;
+  } catch (e) {}
+}
 
 async function loadRepoPath() {
   try {
     const d = await (await api("/api/remote-path")).json();
+    rpCurRemote = d.remote || "";
     $("#rpRemote").textContent = d.remote || "—";
+    loadRemoteSelect();
     $("#rpPath").textContent = d.path || "—";
     const conn = $("#rpConn");
     conn.textContent = d.connected ? "연결됨" : "연결 안 됨";
@@ -556,21 +567,31 @@ function rmRenderCrumb() {
   $("#rmCrumb").innerHTML = segs.join(" / ");
 }
 
-function rmGoConfirm(to) {
-  $("#rmcFrom").textContent = $("#rpPath").textContent;
-  $("#rmcTo").textContent = to;
+async function rmGoConfirm(remote, path) {
+  const r = remote || rpCurRemote;
+  $("#rmcFrom").textContent = rpCurRemote + ":" + $("#rpPath").textContent;
+  $("#rmcTo").textContent = r + ":" + path;
+  $("#rmcMode").textContent = "대상 점검 중…";
   $("#rmcPass").value = ""; $("#rmcPhrase").value = "";
   $("#rmcMsg").textContent = "";
   $("#rmBrowse").hidden = true;
   $("#rmConfirmStep").hidden = false;
-  $("#rmConfirmStep").dataset.to = to;
+  $("#rmConfirmStep").dataset.remote = remote || "";
+  $("#rmConfirmStep").dataset.to = path;
+  try {
+    const t = await (await api(`/api/remote-target?remote=${encodeURIComponent(r)}&path=${encodeURIComponent(path)}`)).json();
+    if (!t.reachable) { $("#rmcMode").textContent = "⚠ 대상 원격에 연결할 수 없습니다."; }
+    else if (t.hasRepo) { $("#rmcMode").textContent = "채택 전환: 데이터 이동 없이 이 저장소로 전환합니다(원본 유지)."; }
+    else { $("#rmcMode").textContent = "이동: 복사·검증 후 원본은 삭제됩니다."; }
+  } catch (e) { $("#rmcMode").textContent = ""; }
 }
 
 async function rmStartMigrate() {
   const to = $("#rmConfirmStep").dataset.to;
+  const toRemote = $("#rmConfirmStep").dataset.remote || "";
   const m = $("#rmcMsg"); m.className = "msg"; m.textContent = "시작 중…";
   try {
-    const r = await api("/api/remote-migrate", { method: "POST", body: JSON.stringify({ Path: to, Password: $("#rmcPass").value, Confirm: $("#rmcPhrase").value }) });
+    const r = await api("/api/remote-migrate", { method: "POST", body: JSON.stringify({ Remote: toRemote, Path: to, Password: $("#rmcPass").value, Confirm: $("#rmcPhrase").value }) });
     if (!r.ok) { m.className = "msg fail"; m.textContent = "✕ " + (await r.text()); return; }
     $("#rmConfirmStep").hidden = true;
     $("#rmProgress").hidden = false;
@@ -588,13 +609,24 @@ async function pollMigrate() {
 }
 function renderMigrate(st) {
   const info = MP_PHASES[st.phase] || [st.phase || "—", 0];
-  $("#mpPhase").textContent = info[0];
+  const modeLbl = st.mode === "adopt" ? "[채택] " : st.mode === "move" ? "[이동] " : "";
+  $("#mpPhase").textContent = modeLbl + info[0];
   $("#mpFill").style.width = info[1] + "%";
   $("#mpFill").classList.toggle("fail", st.phase === "failed");
   $("#mpStats").textContent = st.stats || "";
   const err = $("#mpErr");
   if (st.error) { err.hidden = false; err.textContent = st.error; err.className = "mp-err" + (st.phase === "failed" ? " fatal" : ""); }
   else err.hidden = true;
+}
+function remoteSwitchOpen() {
+  const remote = $("#remoteSel").value;
+  if (!remote || remote === rpCurRemote) return;
+  const path = $("#rpPath").textContent;
+  $("#remoteModal").hidden = false;
+  $("#rmBrowse").hidden = true;
+  $("#rmProgress").hidden = true;
+  $("#rmConfirmStep").hidden = false;
+  rmGoConfirm(remote, path === "—" ? "" : path);
 }
 
 $("#rpChange") && ($("#rpChange").onclick = remoteOpen);
@@ -613,8 +645,9 @@ $("#rmMkPath") && ($("#rmMkPath").onclick = () => {
 });
 $("#rmNext") && ($("#rmNext").onclick = () => {
   if (!rmTarget) { return; }
-  rmGoConfirm(rmTarget);
+  rmGoConfirm("", rmTarget);
 });
+$("#remoteSwitchBtn") && ($("#remoteSwitchBtn").onclick = remoteSwitchOpen);
 $("#rmcBack") && ($("#rmcBack").onclick = () => { $("#rmConfirmStep").hidden = true; $("#rmBrowse").hidden = false; });
 $("#rmcStart") && ($("#rmcStart").onclick = rmStartMigrate);
 $("#mpClose") && ($("#mpClose").onclick = remoteClose);
