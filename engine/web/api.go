@@ -109,6 +109,8 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/restore", s.requireAuth(s.handleRestore))
 	mux.HandleFunc("/api/restore-download", s.requireAuth(s.handleRestoreDownload))
 	mux.HandleFunc("/api/rclone-gui", s.requireAuth(s.handleRcloneGUI))
+	mux.HandleFunc("/api/remote-path", s.requireAuth(s.handleRemotePath))
+	mux.HandleFunc("/api/remote-ls", s.requireAuth(s.handleRemoteLs))
 	mux.HandleFunc("/api/rclone-remotes", s.requireAuth(s.handleRcloneRemotes))
 	mux.HandleFunc("/api/rclone-add", s.requireAuth(s.handleRcloneAdd))
 	mux.HandleFunc("/api/rclone-cli", s.requireAuth(s.handleRcloneCLI))

@@ -1,8 +1,14 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
+	"net/http"
 	"os"
+	"os/exec"
+	"sort"
 	"strings"
+	"time"
 )
 
 const (
@@ -63,4 +69,62 @@ func writeRemotePath(path string) error {
 		return err
 	}
 	return os.Rename(tmp, remotePathFile)
+}
+
+// remoteConnected reports whether the active remote answers a shallow listing.
+func remoteConnected(ctx context.Context) bool {
+	cctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	return exec.CommandContext(cctx, "rclone", "lsd", activeRemote()+":", "--max-depth", "1").Run() == nil
+}
+
+// handleRemotePath (GET): current remote + active subpath + connectivity.
+func (s *Server) handleRemotePath(w http.ResponseWriter, r *http.Request) {
+	s.writeJSON(w, 200, map[string]any{
+		"remote":    activeRemote(),
+		"path":      currentRepoPath(),
+		"connected": remoteConnected(r.Context()),
+	})
+}
+
+// handleRemoteLs (GET ?path=): list folders (dirs only) under the active remote.
+func (s *Server) handleRemoteLs(w http.ResponseWriter, r *http.Request) {
+	if activeRemote() == "" {
+		s.writeJSON(w, 400, map[string]string{"error": "원격이 설정되지 않았습니다"})
+		return
+	}
+	path := strings.Trim(strings.TrimSpace(r.URL.Query().Get("path")), "/")
+	if path != "" && !validRemotePath(path) {
+		http.Error(w, "bad path", 400)
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "rclone", "lsjson", activeRemote()+":"+path, "--dirs-only").Output()
+	if err != nil {
+		s.writeJSON(w, 502, map[string]string{"error": "원격 조회 실패 (연결을 확인하세요)"})
+		return
+	}
+	var raw []struct {
+		Name  string `json:"Name"`
+		IsDir bool   `json:"IsDir"`
+	}
+	json.Unmarshal(out, &raw)
+	type entry struct {
+		Name string `json:"name"`
+		Path string `json:"path"`
+	}
+	entries := []entry{}
+	for _, e := range raw {
+		if !e.IsDir {
+			continue
+		}
+		child := e.Name
+		if path != "" {
+			child = path + "/" + e.Name
+		}
+		entries = append(entries, entry{Name: e.Name, Path: child})
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name < entries[j].Name })
+	s.writeJSON(w, 200, map[string]any{"path": path, "entries": entries})
 }
