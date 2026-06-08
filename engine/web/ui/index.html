@@ -7,10 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=20260608b">
-<link rel="stylesheet" href="/vendor/xterm.css?v=20260608b">
-<script src="/vendor/xterm.js?v=20260608b"></script>
-<script src="/vendor/xterm-addon-fit.js?v=20260608b"></script>
+<link rel="stylesheet" href="/style.css?v=20260608c">
+<link rel="stylesheet" href="/vendor/xterm.css?v=20260608c">
+<script src="/vendor/xterm.js?v=20260608c"></script>
+<script src="/vendor/xterm-addon-fit.js?v=20260608c"></script>
 </head>
 <body>
 <div id="app">
@@ -58,6 +58,12 @@
         <p class="dim" style="margin:0 0 12px;font-size:.86rem">백업 루트는 <code>/home</code> · <code>/var/lib/docker/volumes</code> 로 고정입니다(컨테이너 마운트 기반). 그 안에서 <b>무엇을 제외할지</b>를 아래에서 정합니다. 한 줄에 하나, 변경은 <b>다음 백업부터</b> 적용됩니다.</p>
         <textarea id="excludes" spellcheck="false" placeholder="**/cache&#10;/home/docker/jenkins/workspace"></textarea>
         <div class="row-actions"><button id="saveExcludes" class="btn-primary">제외 규칙 저장</button><span id="exMsg" class="msg"></span></div>
+      </div>
+      <div class="card">
+        <h2>알림 (Discord/Slack webhook)</h2>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem">백업 성공/실패 시 이 webhook으로 알림을 보냅니다. Discord·Slack 호환. <b>비우고 저장하면 알림이 꺼집니다.</b> <span class="dim">(<code>/secrets/discord-webhook</code> 파일이 있으면 그게 우선합니다.)</span></p>
+        <div class="field"><div class="lab">Webhook URL</div><div class="ctl"><input id="alertUrl" type="text" placeholder="https://discord.com/api/webhooks/…" spellcheck="false" autocomplete="off" style="width:min(420px,70vw)"></div></div>
+        <div class="row-actions"><button id="alertSave" class="btn-primary">저장</button><button id="alertTest" class="btn-ghost">테스트 전송</button><span id="alertMsg" class="msg"></span></div>
       </div>
     </section>
 
@@ -236,6 +242,6 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=20260608b"></script>
+<script src="/app.js?v=20260608c"></script>
 </body>
 </html>

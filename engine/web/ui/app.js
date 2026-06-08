@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-08b";
+const BUILD = "ui-2026-06-08c";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -652,6 +652,31 @@ $("#rmcBack") && ($("#rmcBack").onclick = () => { $("#rmConfirmStep").hidden = t
 $("#rmcStart") && ($("#rmcStart").onclick = rmStartMigrate);
 $("#mpClose") && ($("#mpClose").onclick = remoteClose);
 
+/* ---------- alert webhook ---------- */
+async function loadAlertWebhook() {
+  const el = $("#alertUrl"); if (!el) return;
+  try { const d = await (await api("/api/alert-webhook")).json(); el.value = d.url || ""; } catch (e) {}
+}
+async function alertSave() {
+  const m = $("#alertMsg"); m.className = "msg"; m.textContent = "저장 중…";
+  try {
+    const r = await api("/api/alert-webhook", { method: "POST", body: JSON.stringify({ URL: $("#alertUrl").value }) });
+    if (!r.ok) { m.className = "msg fail"; m.textContent = "✕ " + (await r.text()); return; }
+    const d = await r.json();
+    m.className = "msg ok"; m.textContent = d.configured ? "✓ 저장됨" : "✓ 알림 해제됨";
+  } catch (e) { if (String(e.message) !== "unauthorized") { m.className = "msg fail"; m.textContent = "✕ " + e.message; } }
+}
+async function alertTest() {
+  const m = $("#alertMsg"); m.className = "msg"; m.textContent = "전송 중…";
+  try {
+    const d = await (await api("/api/alert-webhook-test", { method: "POST", body: JSON.stringify({ URL: $("#alertUrl").value }) })).json();
+    if (d.ok) { m.className = "msg ok"; m.textContent = "✓ 테스트 알림 전송됨 — 채널을 확인하세요"; }
+    else { m.className = "msg fail"; m.textContent = "✕ 전송 실패: " + (d.error || ""); }
+  } catch (e) { if (String(e.message) !== "unauthorized") { m.className = "msg fail"; m.textContent = "✕ " + e.message; } }
+}
+$("#alertSave") && ($("#alertSave").onclick = alertSave);
+$("#alertTest") && ($("#alertTest").onclick = alertTest);
+
 $("#logout").onclick = logout;
 
 function failCard(sel, e) {
@@ -674,6 +699,7 @@ function failCard(sel, e) {
   rgStatus();
   loadRemotes();
   loadRepoPath();
+  loadAlertWebhook();
   loadHistory().catch(e => failCard("#history", e));
   loadSnaps().then(() => { if (window._busyAtLoad) pollUntilIdle(); }).catch(e => failCard("#snaps", e));
 })();
