@@ -20,7 +20,7 @@ type DBJob struct {
 }
 
 var dbJobNameRe = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,64}$`)
-var dbJobTypes = map[string]bool{"postgres": true, "mongodb": true, "redis": true}
+var dbJobTypes = map[string]bool{"postgres": true, "mongodb": true, "redis": true, "mysql": true, "mariadb": true}
 
 // defaultDBJobs mirrors the legacy hardcoded 3-type behavior (shown when no file).
 func defaultDBJobs() []DBJob {

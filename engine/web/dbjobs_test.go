@@ -7,7 +7,7 @@ func TestValidDBJob(t *testing.T) {
 	if err := validDBJob(ok); err != nil {
 		t.Errorf("expected valid: %v", err)
 	}
-	if validDBJob(DBJob{Name: "x", Type: "mysql", Container: "c"}) == nil {
+	if validDBJob(DBJob{Name: "x", Type: "oracle", Container: "c"}) == nil {
 		t.Error("unknown type must fail")
 	}
 	if validDBJob(DBJob{Name: "bad name", Type: "redis", Container: "c"}) == nil {
@@ -18,6 +18,11 @@ func TestValidDBJob(t *testing.T) {
 	}
 	if err := validDBJob(DBJob{Name: "x", Type: "redis", Container: "c", Data: ""}); err != nil {
 		t.Errorf("empty data should be allowed: %v", err)
+	}
+	for _, ty := range []string{"mysql", "mariadb"} {
+		if err := validDBJob(DBJob{Name: "x", Type: ty, Container: "c"}); err != nil {
+			t.Errorf("%s should be valid: %v", ty, err)
+		}
 	}
 }
 
