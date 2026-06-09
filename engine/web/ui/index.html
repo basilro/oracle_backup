@@ -7,10 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=20260609b">
-<link rel="stylesheet" href="/vendor/xterm.css?v=20260609b">
-<script src="/vendor/xterm.js?v=20260609b"></script>
-<script src="/vendor/xterm-addon-fit.js?v=20260609b"></script>
+<link rel="stylesheet" href="/style.css?v=20260609c">
+<link rel="stylesheet" href="/vendor/xterm.css?v=20260609c">
+<script src="/vendor/xterm.js?v=20260609c"></script>
+<script src="/vendor/xterm-addon-fit.js?v=20260609c"></script>
 </head>
 <body>
 <div id="app">
@@ -70,7 +70,7 @@
             <span class="dim" style="font-size:.72rem;letter-spacing:.12em;text-transform:uppercase">데이터베이스 덤프 작업</span>
             <span id="dbDefaults" class="st" style="display:none">기본값(미저장)</span>
           </div>
-          <p class="dim" style="margin:0 0 10px;font-size:.82rem">덤프할 DB를 추가/삭제합니다. 컨테이너가 없거나 멈춰 있으면 자동으로 건너뜁니다. 데이터 경로는 덤프 성공 시 원본 이중 백업을 막기 위해 제외됩니다(비우면 제외 안 함). 인증정보는 <code>secrets/db-creds.env</code>에서 관리합니다. <b>모두 삭제하면 DB 덤프를 건너뜁니다.</b></p>
+          <p class="dim" style="margin:0 0 10px;font-size:.82rem">덤프할 DB를 추가/삭제합니다. 컨테이너가 없거나 멈춰 있으면 자동으로 건너뜁니다. 데이터 경로는 덤프 성공 시 원본 이중 백업을 막기 위해 제외됩니다(비우면 제외 안 함). 인증정보는 <code>secrets/db-creds.env</code>에서 관리합니다(postgres=PG_USER, mongo=MONGO_USER/PASS, redis=REDIS_PASS, mysql·mariadb=MYSQL_USER/MYSQL_PASS). <b>모두 삭제하면 DB 덤프를 건너뜁니다.</b> ChromaDB 등 덤프 도구가 없는 DB는 데이터 디렉터리가 그대로 백업되며, 완전 일관 스냅샷이 필요하면 백업 시간대에 해당 컨테이너를 잠시 멈추세요.</p>
           <table id="dbTable" class="db-table"></table>
           <div class="row-actions" style="margin-top:10px"><button id="dbAdd" class="btn-ghost">DB 추가</button><button id="dbSave" class="btn-primary">DB 작업 저장</button><span id="dbMsg" class="msg"></span></div>
         </div>
@@ -196,7 +196,7 @@
           <li><b>백업/무결성 스케줄</b> — cron(분 시 일 월 요일, KST). 자동 스케줄러 토글로 on/off.</li>
           <li><b>DB 일관성 백업</b> — 켜면 백업 전에 DB를 덤프합니다.</li>
           <li><b>제외 규칙</b> — restic 제외 패턴(한 줄에 하나). 다음 백업부터 적용.</li>
-          <li><b>백업 대상 경로 · DB</b> — 소스 경로(기본 <code>/home</code>, <code>/var/lib/docker/volumes</code>는 항상 포함)와 DB 덤프 작업 목록(추가·삭제·on/off).</li>
+          <li><b>백업 대상 경로 · DB</b> — 소스 경로(기본 <code>/home</code>, <code>/var/lib/docker/volumes</code>는 항상 포함)와 DB 덤프 작업 목록(추가·삭제·on/off). 유형: postgres·mongodb·redis·mysql·mariadb. 자격증명은 <code>secrets/db-creds.env</code>(mysql·mariadb는 <code>MYSQL_USER</code>·<code>MYSQL_PASS</code>). ChromaDB 등은 데이터 디렉터리로 그대로 백업됩니다(완전 일관은 백업창에 컨테이너 정지).</li>
           <li><b>알림 (webhook)</b> — Discord/Slack 호환 URL. "테스트 전송"으로 즉시 확인. 비우고 저장하면 알림 끔.</li>
         </ul>
       </div>
@@ -334,6 +334,6 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=20260609b"></script>
+<script src="/app.js?v=20260609c"></script>
 </body>
 </html>

@@ -31,7 +31,7 @@ engine 컨테이너 (docker.sock + /home:ro 마운트, 웹 UI :8088)
 |---|---|
 | `repo-pass` | restic 저장소 비밀번호 (**분실 시 복구 불가**) |
 | `web-admin.hash` | 웹 관리자 비밀번호의 bcrypt 해시 |
-| `db-creds.env` | DB 자격증명(`PG_USER`,`MONGO_USER/PASS`,`REDIS_PASS`) — DB 백업 시 |
+| `db-creds.env` | DB 자격증명(`PG_USER`,`MONGO_USER/PASS`,`REDIS_PASS`,`MYSQL_USER/MYSQL_PASS`) — DB 백업 시 |
 | `discord-webhook` | 실패/성공 알림 webhook URL (선택) |
 
 > `rclone/rclone.conf`(Drive 토큰)는 `secrets/`가 아니라 별도로 두고 ro 마운트됩니다.

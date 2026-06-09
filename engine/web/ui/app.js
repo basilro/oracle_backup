@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-09b";
+const BUILD = "ui-2026-06-09c";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -666,7 +666,7 @@ async function saveSrcPaths() {
   } catch (e) { if (String(e.message) !== "unauthorized") { m.className = "msg fail"; m.textContent = "✕ " + e.message; } }
 }
 let dbJobs = [];
-const DB_TYPES = ["postgres", "mongodb", "redis"];
+const DB_TYPES = ["postgres", "mongodb", "redis", "mysql", "mariadb"];
 async function loadDBJobs() {
   if (!$("#dbTable")) return;
   try {
