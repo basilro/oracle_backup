@@ -7,10 +7,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Sora:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/style.css?v=20260608c">
-<link rel="stylesheet" href="/vendor/xterm.css?v=20260608c">
-<script src="/vendor/xterm.js?v=20260608c"></script>
-<script src="/vendor/xterm-addon-fit.js?v=20260608c"></script>
+<link rel="stylesheet" href="/style.css?v=20260609a">
+<link rel="stylesheet" href="/vendor/xterm.css?v=20260609a">
+<script src="/vendor/xterm.js?v=20260609a"></script>
+<script src="/vendor/xterm-addon-fit.js?v=20260609a"></script>
 </head>
 <body>
 <div id="app">
@@ -58,6 +58,21 @@
         <p class="dim" style="margin:0 0 12px;font-size:.86rem">백업 루트는 <code>/home</code> · <code>/var/lib/docker/volumes</code> 로 고정입니다(컨테이너 마운트 기반). 그 안에서 <b>무엇을 제외할지</b>를 아래에서 정합니다. 한 줄에 하나, 변경은 <b>다음 백업부터</b> 적용됩니다.</p>
         <textarea id="excludes" spellcheck="false" placeholder="**/cache&#10;/home/docker/jenkins/workspace"></textarea>
         <div class="row-actions"><button id="saveExcludes" class="btn-primary">제외 규칙 저장</button><span id="exMsg" class="msg"></span></div>
+      </div>
+      <div class="card">
+        <h2>백업 대상 경로 · 데이터베이스</h2>
+        <p class="dim" style="margin:0 0 12px;font-size:.86rem">백업할 소스 경로입니다. <code>/var/lib/docker/volumes</code>는 항상 포함됩니다. 여러 경로는 공백으로 구분하세요.</p>
+        <div class="field"><div class="lab">소스 경로<small>기본 /home</small></div><div class="ctl"><input id="srcPaths" type="text" placeholder="/home" spellcheck="false" autocomplete="off" style="width:min(360px,65vw)"></div></div>
+        <div class="row-actions"><button id="saveSrc" class="btn-primary">소스 경로 저장</button><span id="srcMsg" class="msg"></span></div>
+        <div style="margin-top:18px;border-top:1px solid var(--border-soft);padding-top:14px">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+            <span class="dim" style="font-size:.72rem;letter-spacing:.12em;text-transform:uppercase">데이터베이스 덤프 작업</span>
+            <span id="dbDefaults" class="st" style="display:none">기본값(미저장)</span>
+          </div>
+          <p class="dim" style="margin:0 0 10px;font-size:.82rem">덤프할 DB를 추가/삭제합니다. 컨테이너가 없거나 멈춰 있으면 자동으로 건너뜁니다. 데이터 경로는 덤프 성공 시 원본 이중 백업을 막기 위해 제외됩니다(비우면 제외 안 함). 인증정보는 <code>secrets/db-creds.env</code>에서 관리합니다. <b>모두 삭제하면 DB 덤프를 건너뜁니다.</b></p>
+          <table id="dbTable" class="db-table"></table>
+          <div class="row-actions" style="margin-top:10px"><button id="dbAdd" class="btn-ghost">DB 추가</button><button id="dbSave" class="btn-primary">DB 작업 저장</button><span id="dbMsg" class="msg"></span></div>
+        </div>
       </div>
       <div class="card">
         <h2>알림 (Discord/Slack webhook)</h2>
@@ -242,6 +257,6 @@
     </div>
   </div>
 </div>
-<script src="/app.js?v=20260608c"></script>
+<script src="/app.js?v=20260609a"></script>
 </body>
 </html>

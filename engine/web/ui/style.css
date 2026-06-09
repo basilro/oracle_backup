@@ -289,3 +289,8 @@ tbody tr:hover { background: rgba(255,255,255,.018); }
 .mp-stats { margin:10px 0 0; font-size:.78rem; color:var(--dim,#8b949e); white-space:pre-wrap; word-break:break-all; }
 .mp-err { margin-top:10px; font-size:.85rem; color:var(--fail,#f85149); }
 .mp-err.fatal { font-weight:600; }
+
+.db-table { width:100%; border-collapse:collapse; font-size:.84rem; }
+.db-table th { text-align:left; font-size:.72rem; color:var(--dim,#8b949e); text-transform:uppercase; letter-spacing:.06em; padding:4px 6px; }
+.db-table td { padding:4px 6px; border-top:1px solid var(--border-soft); }
+.db-table input[type=text], .db-table input:not([type]), .db-table select { width:100%; }

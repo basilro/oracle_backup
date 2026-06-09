@@ -1,4 +1,4 @@
-const BUILD = "ui-2026-06-08c";
+const BUILD = "ui-2026-06-09a";
 let csrf = "";
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -652,6 +652,59 @@ $("#rmcBack") && ($("#rmcBack").onclick = () => { $("#rmConfirmStep").hidden = t
 $("#rmcStart") && ($("#rmcStart").onclick = rmStartMigrate);
 $("#mpClose") && ($("#mpClose").onclick = remoteClose);
 
+/* ---------- source paths + db jobs ---------- */
+async function loadSrcPaths() {
+  const el = $("#srcPaths"); if (!el) return;
+  try { const d = await (await api("/api/source-paths")).json(); el.value = d.paths || "/home"; } catch (e) {}
+}
+async function saveSrcPaths() {
+  const m = $("#srcMsg"); m.className = "msg"; m.textContent = "저장 중…";
+  try {
+    const r = await api("/api/source-paths", { method: "POST", body: JSON.stringify({ paths: $("#srcPaths").value.trim() || "/home" }) });
+    if (!r.ok) { m.className = "msg fail"; m.textContent = "✕ " + (await r.text()); return; }
+    m.className = "msg ok"; m.textContent = "✓ 저장됨 (다음 백업부터 적용)";
+  } catch (e) { if (String(e.message) !== "unauthorized") { m.className = "msg fail"; m.textContent = "✕ " + e.message; } }
+}
+let dbJobs = [];
+const DB_TYPES = ["postgres", "mongodb", "redis"];
+async function loadDBJobs() {
+  if (!$("#dbTable")) return;
+  try {
+    const d = await (await api("/api/db-jobs")).json();
+    dbJobs = d.jobs || [];
+    $("#dbDefaults").style.display = d.defaults ? "" : "none";
+    renderDBJobs();
+  } catch (e) {}
+}
+function renderDBJobs() {
+  const t = $("#dbTable");
+  const head = "<thead><tr><th>이름</th><th>유형</th><th>컨테이너</th><th>데이터 경로</th><th>사용</th><th></th></tr></thead>";
+  const rows = dbJobs.map((j, i) => `<tr>
+    <td><input data-i="${i}" data-k="name" value="${esc(j.name)}" style="width:90px"></td>
+    <td><select data-i="${i}" data-k="type">${DB_TYPES.map(t => `<option${t === j.type ? " selected" : ""}>${t}</option>`).join("")}</select></td>
+    <td><input data-i="${i}" data-k="container" value="${esc(j.container)}" style="width:100px"></td>
+    <td><input data-i="${i}" data-k="data" value="${esc(j.data || "")}" placeholder="(없으면 제외 안 함)" style="width:160px"></td>
+    <td style="text-align:center"><input type="checkbox" data-i="${i}" data-k="enabled"${j.enabled ? " checked" : ""}></td>
+    <td><button class="btn-ghost" data-del="${i}" style="padding:2px 8px">삭제</button></td></tr>`).join("");
+  const empty = dbJobs.length ? "" : `<tr><td colspan="6" class="empty">DB 작업 없음 — DB를 사용하지 않으면 이대로 저장하세요</td></tr>`;
+  t.innerHTML = head + "<tbody>" + (rows || empty) + "</tbody>";
+}
+function dbReadField(el) {
+  const i = +el.getAttribute("data-i"), k = el.getAttribute("data-k");
+  if (!dbJobs[i]) return;
+  dbJobs[i][k] = k === "enabled" ? el.checked : el.value;
+}
+async function saveDBJobs() {
+  const m = $("#dbMsg"); m.className = "msg"; m.textContent = "저장 중…";
+  try {
+    const r = await api("/api/db-jobs", { method: "POST", body: JSON.stringify({ jobs: dbJobs }) });
+    if (!r.ok) { m.className = "msg fail"; m.textContent = "✕ " + (await r.text()); return; }
+    const d = await r.json();
+    dbJobs = d.jobs || []; $("#dbDefaults").style.display = "none"; renderDBJobs();
+    m.className = "msg ok"; m.textContent = "✓ 저장됨 (다음 백업부터 적용)";
+  } catch (e) { if (String(e.message) !== "unauthorized") { m.className = "msg fail"; m.textContent = "✕ " + e.message; } }
+}
+
 /* ---------- alert webhook ---------- */
 async function loadAlertWebhook() {
   const el = $("#alertUrl"); if (!el) return;
@@ -674,6 +727,13 @@ async function alertTest() {
     else { m.className = "msg fail"; m.textContent = "✕ 전송 실패: " + (d.error || ""); }
   } catch (e) { if (String(e.message) !== "unauthorized") { m.className = "msg fail"; m.textContent = "✕ " + e.message; } }
 }
+$("#saveSrc") && ($("#saveSrc").onclick = saveSrcPaths);
+$("#dbAdd") && ($("#dbAdd").onclick = () => { dbJobs.push({ name: "db" + (dbJobs.length + 1), type: "postgres", container: "", data: "", enabled: true }); renderDBJobs(); });
+$("#dbSave") && ($("#dbSave").onclick = saveDBJobs);
+$("#dbTable") && $("#dbTable").addEventListener("input", e => { if (e.target.matches("input,select")) dbReadField(e.target); });
+$("#dbTable") && $("#dbTable").addEventListener("change", e => { if (e.target.matches("input[type=checkbox],select")) dbReadField(e.target); });
+$("#dbTable") && $("#dbTable").addEventListener("click", e => { const d = e.target.closest("button[data-del]"); if (d) { dbJobs.splice(+d.getAttribute("data-del"), 1); renderDBJobs(); } });
+
 $("#alertSave") && ($("#alertSave").onclick = alertSave);
 $("#alertTest") && ($("#alertTest").onclick = alertTest);
 
@@ -700,6 +760,8 @@ function failCard(sel, e) {
   loadRemotes();
   loadRepoPath();
   loadAlertWebhook();
+  loadSrcPaths();
+  loadDBJobs();
   loadHistory().catch(e => failCard("#history", e));
   loadSnaps().then(() => { if (window._busyAtLoad) pollUntilIdle(); }).catch(e => failCard("#snaps", e));
 })();
