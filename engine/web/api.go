@@ -105,6 +105,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/history", s.requireAuth(s.handleHistory))
 	mux.HandleFunc("/api/logs", s.requireAuth(s.handleLogs))
 	mux.HandleFunc("/api/config", s.requireAuth(s.handleConfig))
+	mux.HandleFunc("/api/source-paths", s.requireAuth(s.handleSourcePaths))
 	mux.HandleFunc("/api/alert-webhook", s.requireAuth(s.handleAlertWebhook))
 	mux.HandleFunc("/api/alert-webhook-test", s.requireAuth(s.handleAlertWebhookTest))
 	mux.HandleFunc("/api/excludes", s.requireAuth(s.handleExcludes))
