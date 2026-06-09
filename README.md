@@ -57,7 +57,7 @@ docker compose build
 #    rclone.conf 가 없는 새 서버라면 여기서 만든다. 만든 remote 이름을 기억.
 docker run --rm -it -v "$PWD/rclone:/etc/rclone" bcjang/cloud_backup:v1.2.1 rclone-config
 #    (이미 다른 곳의 rclone.conf 가 있으면: cp <인증된 rclone.conf> rclone/rclone.conf 로 대체 가능)
-#    Google Drive 등 OAuth 는 브라우저 있는 PC에서 `rclone authorize "drive"` 토큰을 붙여넣는다 (§2.5)
+#    Google Drive 등 OAuth 는 브라우저 있는 PC에서 `rclone authorize "drive"` 토큰을 붙여넣는다 (§3)
 
 # 3) .env 편집: WEB_PORT / WEB_ADMIN_USER / WEB_ADMIN_PASSWORD / REMOTE_NAME(=만든 remote 이름) / HOST_TAG
 $EDITOR .env
@@ -73,7 +73,8 @@ docker run --rm -v "$PWD/rclone:/etc/rclone" bcjang/cloud_backup:v1.2.1 rclone l
 #   docker compose run --rm engine init      ; 다시 false 로 되돌림
 docker compose up -d
 
-# 6) 웹 접속 → 로그인 → "지금 백업" 으로 첫 백업 확인
+# 6) 웹 접속(http://<서버IP>:<WEB_PORT>, 기본 8088) → 로그인 → "지금 백업" 으로 첫 백업 확인
+#    이후 사용법(설정/목적지/복원 등)은 대시보드 "매뉴얼" 탭 참고
 ```
 
 > **제약**
@@ -85,7 +86,7 @@ docker compose up -d
 
 ---
 
-## 2.5 목적지(rclone remote) 연결 설정 — Google Drive / WebDAV / Synology / FTP
+## 3. 목적지(rclone remote) 연결 설정 — Google Drive / WebDAV / Synology / FTP
 
 백업 **목적지**는 `rclone/rclone.conf` 의 한 `[섹션]`(=remote)으로 정의하고, `.env` 의 `REMOTE_NAME` 으로 어느 remote를 쓸지 고른다. 자격증명(Drive 토큰·WebDAV 비번 등)은 이 파일에만 두며 웹 UI에서는 다루지 않는다.
 
@@ -133,85 +134,3 @@ docker run --rm -v "$PWD/rclone:/etc/rclone" bcjang/cloud_backup:v1.2.1 rclone l
 
 > 참고: 실행 중 엔진은 `rclone.conf` 를 **읽기 전용**으로 마운트한다(보안). 설정 변경은 위 `docker run ... config` 처럼 별도 명령으로 `./rclone/rclone.conf` 를 고친 뒤 `docker compose restart engine`.
 > 백엔드 종류와 무관하게 저장소 경로는 `<REMOTE_NAME>:backups/<HOST_TAG>` 이며, restic 암호화는 백엔드와 독립이다(어디에 두든 내용은 암호화됨).
-
----
-
-## 3. 웹 대시보드 (상세 사용법은 앱 안 "매뉴얼" 탭)
-
-- 주소: `http://<서버IP>:<WEB_PORT>` (기본 8088). 외부 노출 시 리버스 프록시+TLS 권장.
-- 로그인 후 **개요 / 설정 / 목적지 / 복원 / 매뉴얼** 탭 제공. 백업·복원·스케줄·목적지 추가·원격 경로/전환·DB 작업·알림 등 **상세 사용법은 "매뉴얼" 탭**에 정리돼 있습니다(이 README는 설치 중심).
-- 운영설정(보존일·대역폭·스케줄·제외목록 등) 저장 시 스케줄러 자동 reload. 시크릿은 UI에서 다루지 않음(파일 전용).
-- 복원 등 위험 액션은 **세션 + CSRF + 관리자 비밀번호 재확인**이 필요하고, 결과는 `/restore-out`(전용 볼륨)으로만 나가 라이브 데이터를 덮어쓰지 않는다.
-
----
-
-## 4. 백업 동작
-
-- 스케줄(`BACKUP_SCHEDULE`, TZ=Asia/Seoul) 또는 수동 트리거.
-- DB: 컨테이너 상태를 `docker inspect`로 판정 — 실행 중이면 일관성 덤프(+라이브 디렉터리 동적 제외), 정지면 raw 백업, 실행 중 덤프 실패면 **런 실패**(라이브 파일 폴백 금지).
-- `restic backup --json` 요약을 파싱해 추가 용량/스냅샷ID를 이력에 기록.
-- 보존: `restic forget --keep-daily N --tag auto --prune`. 모든 스냅샷은 `auto` 태그(트리거 출처는 이력 DB에만).
-- 주간 무결성 검증(`CHECK_SCHEDULE`): `restic check --read-data-subset`.
-- 운영 무영향: `ionice -c3 nice -n19` + `--limit-upload`.
-
----
-
-## 5. 복원 (CLI)
-
-웹 UI 외에 컨테이너 내부 CLI로도 가능:
-```bash
-# 스냅샷 목록
-docker compose exec engine restic snapshots
-
-# 특정 경로를 /restore-out 으로
-docker compose exec engine /opt/backup/scripts/home-restore.sh restore latest /restore-out /home/docker/gitea
-
-# DB 덤프만 복원 후 수동 import
-docker compose exec engine /opt/backup/scripts/home-restore.sh dbs latest /restore-out
-#   postgres: gunzip -c <ts>/postgres/all.sql.gz | docker exec -i postgres psql -U <user>
-#   mongodb : docker exec -i mongodb mongorestore -u <u> -p <p> --authenticationDatabase admin --gzip --archive < <ts>/mongodb/mongo.archive
-#   redis   : redis 정지 → dump.rdb 복사 → 시작
-```
-
-### 새 서버 전체 복구
-1. 위 "새 서버 이식" 으로 스택 구성(같은 `HOST_TAG`/저장소, 같은 `repo-pass`)
-2. `restic restore latest --target /restore-out` 또는 호스트로 직접 복원
-3. DB 덤프 import → `docker compose up -d`(원래 서비스 스택)
-
----
-
-## 6. 이 서버: 호스트 cron → 컨테이너 전환 (단계적·가역적)
-
-기존 호스트 백업(`/etc/cron.d/home-backup`)이 있는 서버에서 컨테이너로 옮길 때:
-```bash
-# A. 호스트 cron 비활성 (rename — 롤백 가능)
-sudo mv /etc/cron.d/home-backup /etc/cron.d/home-backup.disabled && sudo systemctl restart cron
-
-# B. 컨테이너는 수동 검증 (SCHEDULER_ENABLED=false 유지) — 백업/복원 2회 이상 성공 확인
-
-# C. 컨테이너 스케줄러 ON
-sed -i 's/^SCHEDULER_ENABLED=.*/SCHEDULER_ENABLED=true/' config/config.env
-docker compose restart engine     # 또는 웹 UI에서 저장
-#   /api/status 의 next_run 이 다음 03:00 KST 인지 확인
-
-# 롤백: cron 파일 복원 + SCHEDULER_ENABLED=false (compose down 불필요)
-```
-> 전환 전까지는 **호스트 cron과 컨테이너 스케줄러를 동시에 켜지 말 것**(이중 실행·prune 충돌 방지).
-
----
-
-## 7. 트러블슈팅
-
-| 증상 | 조치 |
-|---|---|
-| 저장소 접근 실패 | `docker compose run --rm engine preflight` — rclone.conf/REMOTE_NAME/HOST_TAG/토큰 확인 |
-| `repo unreachable` 로 백업 거부 | 네트워크/토큰 문제. 저장소가 실제 없을 때만 `ALLOW_REPO_INIT=true`로 init |
-| 로그인 실패 | `secrets/web-admin.hash` 가 bcrypt 해시인지, `WEB_ADMIN_USER` 일치 확인 |
-| `busy`(409) | 다른 백업/복원 진행 중 |
-| config 저장 400 | cron 식/숫자 범위/컨테이너명 검증 실패 — 메시지 확인 |
-| 비밀번호 변경 후 로그아웃됨 | 정상(해시 변경 시 기존 세션 무효화) |
-
-## 8. 보안 메모
-- engine은 `docker.sock` 보유 = 사실상 root. 웹은 LAN+로그인 전제, 위험 액션 재인증. 외부 노출 시 프록시+TLS.
-- Drive 토큰(`rclone.conf`)·restic 비밀번호 등 모든 시크릿은 ro 마운트, git 제외, 단일 신뢰 컨테이너 내에서만 사용.
-- restic↔rclone는 컨테이너 내부 stdio 파이프(네트워크 미경유).
