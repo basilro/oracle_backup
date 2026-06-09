@@ -1,7 +1,7 @@
 services:
   engine:
     build: ./engine
-    image: bcjang/cloud_backup:v1.2.0
+    image: bcjang/cloud_backup:v1.2.1
     container_name: backupstack_engine
     hostname: backupstack_engine
     init: true
