@@ -108,6 +108,7 @@ func (s *Server) Routes() http.Handler {
 	mux.HandleFunc("/api/source-paths", s.requireAuth(s.handleSourcePaths))
 	mux.HandleFunc("/api/alert-webhook", s.requireAuth(s.handleAlertWebhook))
 	mux.HandleFunc("/api/alert-webhook-test", s.requireAuth(s.handleAlertWebhookTest))
+	mux.HandleFunc("/api/db-jobs", s.requireAuth(s.handleDBJobs))
 	mux.HandleFunc("/api/excludes", s.requireAuth(s.handleExcludes))
 	mux.HandleFunc("/api/backup", s.requireAuth(s.handleBackup))
 	mux.HandleFunc("/api/restore", s.requireAuth(s.handleRestore))
