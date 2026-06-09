@@ -7,7 +7,12 @@ source /config/config.env
 source "$HERE/lib/common.sh"; source "$HERE/lib/db-dump.sh"; source "$HERE/lib/restic.sh"
 
 : "${STAGING_ROOT:=/home/docker/_backup_staging}"
-BACKUP_PATHS=(/home /var/lib/docker/volumes)
+# 소스 경로: /config/source-paths(UI 설정) → SOURCE_PATHS env → 기본 /home.
+# 그 뒤에 도커 볼륨(고정)을 항상 더한다.
+_SRC_RAW="${SOURCE_PATHS:-/home}"
+[ -s /config/source-paths ] && _SRC_RAW="$(head -n1 /config/source-paths)"
+read -ra _SRC <<< "$_SRC_RAW"
+BACKUP_PATHS=("${_SRC[@]}" /var/lib/docker/volumes)
 SUMMARY_OUT="${SUMMARY_OUT:-/state/last-summary.json}"
 DB_SUMMARY_FILE="${DB_SUMMARY_FILE:-/state/last-db-summary.json}"
 
@@ -40,7 +45,7 @@ FREE_MB=$(df -Pm "$STAGING_ROOT" | awk 'NR==2{print $4}')
 # Phase1: DB 덤프
 if [ "${DB_BACKUP_ENABLED:-true}" = "true" ]; then
     log "--- Phase1 DB dumps ---"; db_summary_open
-    dump_postgres; dump_mongodb; dump_redis
+    run_db_jobs
     db_summary_close
 else log "DB backup disabled"; echo 'null' > "$DB_SUMMARY_FILE"; fi
 

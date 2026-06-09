@@ -27,7 +27,7 @@ RUN apk add --no-cache curl bzip2 && \
 # --- 런타임 ---
 FROM alpine:3.19
 # tini는 compose `init: true`가 PID1로 주입하므로 이미지에서는 불필요(중복 경고 방지).
-RUN apk add --no-cache bash docker-cli gzip curl wget tzdata coreutils util-linux findutils ca-certificates fuse3
+RUN apk add --no-cache bash docker-cli gzip curl wget tzdata coreutils util-linux findutils ca-certificates fuse3 jq
 COPY --from=resticstage /usr/local/bin/restic /usr/local/bin/restic
 COPY --from=rclonebin /usr/local/bin/rclone /usr/local/bin/rclone
 COPY --from=gobuild /backup-engine /opt/backup/backup-engine
