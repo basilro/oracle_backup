@@ -87,11 +87,7 @@ func writeDBJobs(jobs []DBJob) error {
 	if err != nil {
 		return err
 	}
-	tmp := dbJobsFile + ".tmp"
-	if err := os.WriteFile(tmp, b, 0644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, dbJobsFile)
+	return atomicWrite(dbJobsFile, b)
 }
 
 // handleDBJobs: GET → {jobs, defaults}; POST {jobs:[...]} → validate + save.

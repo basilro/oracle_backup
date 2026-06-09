@@ -39,13 +39,7 @@ func readAlertWebhook() string {
 }
 
 // writeAlertWebhook atomically persists the webhook URL.
-func writeAlertWebhook(u string) error {
-	tmp := alertWebhookFile + ".tmp"
-	if err := os.WriteFile(tmp, []byte(u+"\n"), 0644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, alertWebhookFile)
-}
+func writeAlertWebhook(u string) error { return atomicWrite(alertWebhookFile, []byte(u+"\n")) }
 
 // sendWebhookTest posts a test notification (notify()-compatible payload).
 func sendWebhookTest(ctx context.Context, url string) error {

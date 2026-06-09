@@ -391,8 +391,8 @@ func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var body struct {
-			KeepDaily, UploadLimit, MinFreeMB     int
-			BackupSchedule, CheckSchedule         string
+			KeepDaily, UploadLimit, MinFreeMB int
+			BackupSchedule, CheckSchedule     string
 			SchedulerEnabled, DBBackupEnabled bool
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {

@@ -42,21 +42,6 @@ func TestCurrentRepoPath(t *testing.T) {
 	}
 }
 
-func TestPreflightDecision(t *testing.T) {
-	if preflightDecision("a", "a", false, true) == nil {
-		t.Error("same path must fail")
-	}
-	if preflightDecision("a", "b", false, false) == nil {
-		t.Error("disconnected must fail")
-	}
-	if preflightDecision("a", "b", true, true) == nil {
-		t.Error("existing target must fail")
-	}
-	if err := preflightDecision("a", "b", false, true); err != nil {
-		t.Errorf("valid case must pass: %v", err)
-	}
-}
-
 func TestRemoteNameIn(t *testing.T) {
 	list := []string{"gdrive", "onedrive"}
 	if !remoteNameIn("gdrive", list) {

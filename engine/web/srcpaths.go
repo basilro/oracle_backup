@@ -49,11 +49,7 @@ func validSourcePaths(s string) error {
 }
 
 func writeSourcePaths(s string) error {
-	tmp := sourcePathsFile + ".tmp"
-	if err := os.WriteFile(tmp, []byte(strings.TrimSpace(s)+"\n"), 0644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, sourcePathsFile)
+	return atomicWrite(sourcePathsFile, []byte(strings.TrimSpace(s)+"\n"))
 }
 
 // handleSourcePaths: GET → {paths}; POST {paths} → validate + save.

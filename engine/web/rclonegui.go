@@ -29,7 +29,7 @@ const (
 var (
 	rgMu     sync.Mutex
 	rgTimer  *time.Timer
-	rgActive bool                       // GUI running (proxy gate; fast, no docker call)
+	rgActive bool                        // GUI running (proxy gate; fast, no docker call)
 	rgAudit  func(action, result string) // set by main()
 )
 

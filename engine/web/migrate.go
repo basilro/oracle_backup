@@ -70,22 +70,10 @@ func validRemotePath(p string) bool {
 }
 
 // writeRemotePath atomically persists the active subpath (read by entrypoint).
-func writeRemotePath(path string) error {
-	tmp := remotePathFile + ".tmp"
-	if err := os.WriteFile(tmp, []byte(path+"\n"), 0644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, remotePathFile)
-}
+func writeRemotePath(path string) error { return atomicWrite(remotePathFile, []byte(path+"\n")) }
 
 // writeRemoteName atomically persists the active remote name (read by entrypoint).
-func writeRemoteName(name string) error {
-	tmp := remoteNameFile + ".tmp"
-	if err := os.WriteFile(tmp, []byte(name+"\n"), 0644); err != nil {
-		return err
-	}
-	return os.Rename(tmp, remoteNameFile)
-}
+func writeRemoteName(name string) error { return atomicWrite(remoteNameFile, []byte(name+"\n")) }
 
 // configuredRemoteNames parses rclone.conf section headers → remote names.
 func configuredRemoteNames() []string {
@@ -190,20 +178,6 @@ func (s *Server) handleRemoteLs(w http.ResponseWriter, r *http.Request) {
 	s.writeJSON(w, 200, map[string]any{"path": path, "entries": entries})
 }
 
-// preflightDecision is the pure decision: may migration proceed?
-func preflightDecision(from, to string, toExists, connected bool) error {
-	if to == from {
-		return fmt.Errorf("새 경로가 현재 경로와 같습니다")
-	}
-	if !connected {
-		return fmt.Errorf("원격에 연결할 수 없습니다")
-	}
-	if toExists {
-		return fmt.Errorf("대상 경로에 이미 저장소가 있습니다")
-	}
-	return nil
-}
-
 // MigrationStatus is the polled state of an in-flight (or last) migration.
 type MigrationStatus struct {
 	Active     bool   `json:"active"`
@@ -238,10 +212,7 @@ func (m *Migrator) Snapshot() MigrationStatus {
 
 func (m *Migrator) persistLocked() {
 	b, _ := json.Marshal(m.status)
-	tmp := m.statusFile + ".tmp"
-	if os.WriteFile(tmp, b, 0644) == nil {
-		os.Rename(tmp, m.statusFile)
-	}
+	_ = atomicWrite(m.statusFile, b)
 }
 
 func (m *Migrator) setPhase(phase string) {
